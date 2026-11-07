@@ -23,9 +23,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from . import config
+from . import config, vision
 from .checklist import compare
-from .detector import DetectorLoading, DetectorUnavailable, detector
+from .detector import DetectorLoading, DetectorUnavailable
 from .ledger import Ledger
 from .orders import OrderStore
 from .parser import parse_note
@@ -35,7 +35,7 @@ from .security import login, require_role, sign, token_fingerprint, verify
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    detector.warm_up()  # load vision models in the background while staff sign in
+    vision.warm_up()  # load local fallback models in the background while staff sign in
     yield
 
 
@@ -58,6 +58,7 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=()"
+    # (Frames go to OpenRouter from the server, not the browser, so CSP stays 'self'.)
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -96,9 +97,8 @@ def auth_login(req: LoginRequest):
 @app.get("/api/health")
 def health():
     return {
-        "detector": detector.status(),
+        "vision": vision.status(),
         "parser": f"openrouter:{config.PARSE_MODEL}" if config.OPENROUTER_KEY else "rules (no OPENROUTER_KEY)",
-        "images_leave_device": False,
         "thresholds": {"accept": config.CONF_ACCEPT, "confident": config.CONF_CONFIDENT},
     }
 
@@ -151,7 +151,8 @@ async def check_frame(
     mode: str = Form("live"),
     session: dict = Depends(staff_only),
 ):
-    """Run local detection on one frame. The image is hashed, never stored or uploaded."""
+    """Count items in one frame (OpenRouter vision model, or local YOLO).
+    The image is hashed and never stored; see vision.py for what is sent off-device."""
     order = _order(order_id)
     if order.status != "prepared":
         raise HTTPException(409, "Prepare the order before checking it")
@@ -164,7 +165,9 @@ async def check_frame(
 
     labels = sorted(set(order.expected) | set(order.excluded))
     try:
-        result = await run_in_threadpool(detector.detect, data, labels)
+        result = await run_in_threadpool(vision.detect, data, labels)
+    except vision.VisionBusy as e:
+        raise HTTPException(429, {"code": "busy", "message": str(e)})
     except DetectorLoading as e:
         raise HTTPException(503, {"code": "loading", "message": str(e)})
     except DetectorUnavailable as e:
@@ -174,14 +177,21 @@ async def check_frame(
     finally:
         del data  # drop the image bytes as soon as detection is done
 
-    accepted = Counter(b["label"] for b in result["boxes"] if b["conf"] >= config.CONF_ACCEPT)
-    review = {b["label"] for b in result["boxes"] if b["conf"] < config.CONF_ACCEPT}
+    if "counts" in result:  # vision LLM reports counts directly
+        accepted = Counter({k: v for k, v in result["counts"].items() if v > 0})
+        review: set[str] = set()
+    else:
+        accepted = Counter(b["label"] for b in result["boxes"] if b["conf"] >= config.CONF_ACCEPT)
+        review = {b["label"] for b in result["boxes"] if b["conf"] < config.CONF_ACCEPT}
     if mode == "photo":
         order.smoother.reset()
     smoothed = order.smoother.push(accepted)
     items, all_ok = compare(order.expected, order.excluded, smoothed, review, order.sources)
     # Flag rows whose count rests only on low-confidence boxes, so staff can glance at them.
-    confident = {b["label"] for b in result["boxes"] if b["conf"] >= config.CONF_CONFIDENT}
+    if "confident_labels" in result:
+        confident = set(result["confident_labels"])
+    else:
+        confident = {b["label"] for b in result["boxes"] if b["conf"] >= config.CONF_CONFIDENT}
     for item in items:
         item["low_conf"] = item["detected"] > 0 and item["label"] not in confident
     order.last_check = {
@@ -189,13 +199,14 @@ async def check_frame(
         "ts": time.time(), "items": items, "all_ok": all_ok,
     }
 
-    # Log on state changes only, so a 2 fps webcam loop doesn't flood the audit trail.
+    # Log on state changes only, so a continuous camera loop doesn't flood the audit trail.
     summary = json.dumps([(i["label"], i["status"]) for i in items])
     if summary != order.last_logged_summary or mode == "photo":
         order.last_logged_summary = summary
         ledger.append(
             "vision_check", session["sub"], order_id=order.id, frame_sha256=frame_hash,
-            source=order.last_check["source"], all_ok=all_ok,
+            source=order.last_check["source"], all_ok=all_ok, model=result.get("model"),
+            sent_off_device=str(result.get("model", "")).startswith("openrouter"),
             statuses={i["label"]: i["status"] for i in items},
         )
     return {**result, "items": items, "all_ok": all_ok, "frame_sha256": frame_hash,

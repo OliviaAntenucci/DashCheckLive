@@ -59,9 +59,9 @@ AI assists; people decide. The model never seals an order.
        allergy flags. LLM via OpenRouter; deterministic rules fallback.
   FR4  LLM output is validated against an allow-list; notes cannot remove paid
        items; parser used is recorded.
-  FR5  Camera frames (~2 fps) or an uploaded photo are processed locally by two
-       detectors (open-vocabulary YOLO-World with several prompts per item, and
-       COCO-trained YOLO11), merged with non-max suppression.
+  FR5  Camera frames (~1 per 1.5 s) or an uploaded photo are counted by an
+       OpenRouter vision model (google/gemini-2.5-flash) returning JSON counts
+       and boxes; local YOLO-World + YOLO11 take over if OpenRouter fails.
   FR6  Every detected box (>= 0.10) counts; an item counts if seen in any of the
        last 3 frames. Boxes < 0.25 are shown dashed and flagged "low confidence".
   FR13 Sign-in page routes by role: staff → full-screen camera packing station
@@ -83,7 +83,9 @@ AI assists; people decide. The model never seals an order.
 
 6. NON-FUNCTIONAL REQUIREMENTS
 ------------------------------
-  NFR1 Privacy: images never leave the device; only scrubbed text goes to the LLM.
+  NFR1 Privacy: note text is scrubbed before OpenRouter; frames sent to OpenRouter
+       are downscaled, metadata-stripped, label-only context, no-retention
+       providers only, never stored. VISION_BACKEND=local keeps images on device.
   NFR2 Latency: < 1 s per frame on a laptop CPU (yolov8s-worldv2, 640 px).
   NFR3 Reliability: no single AI failure blocks an order; failures fail safe
        (never auto-approve).

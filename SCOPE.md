@@ -10,7 +10,7 @@ A feature DoorDash ships in the **merchant app**, at the moment staff mark an or
 - Sign-in page → role-based landing: full-screen packing station (staff) or pickup screen (Dasher)
 - PII scrubbing before any AI call
 - Note → checklist via OpenRouter (`gpt-4o-mini`) with allow-list validation; offline rules fallback
-- Local detection on a laptop webcam: YOLO-World (multi-prompt) + YOLO11-COCO merged, ~2 fps, 2-of-5 frame smoothing
+- Camera counting via an OpenRouter vision model (`google/gemini-2.5-flash`), one frame every ~1.5 s, with local YOLO-World + YOLO11 as automatic fallback
 - Photo upload fallback
 - Checklist statuses: ok / missing / check manually / unexpected
 - Staff confirm + per-item override reasons; seal enforced server-side
@@ -25,7 +25,7 @@ A feature DoorDash ships in the **merchant app**, at the moment staff mark an or
 
 ## Stretch goals
 
-- Vision-LLM second opinion on uncertain items (e.g. `openai/gpt-4o` via OpenRouter). **Off by default**, because it sends an image off-device; would need an explicit opt-in and frame cropping
+- Crop or blur everything outside the check zone before frames go to OpenRouter
 - Real QR scanning in the Dasher simulator (camera decode instead of paste)
 - Customer-facing “verified packed” receipt
 - Advanced order parsing (combos, modifiers, multi-bag orders)

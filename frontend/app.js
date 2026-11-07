@@ -109,16 +109,25 @@ async function pollHealth() {
   clearTimeout(state.healthTimer);
   const h = await api("/api/health").catch(() => null);
   if (!h) return;
-  const d = h.detector;
+  const v = h.vision;
+  const d = v.local;
+  state.frameInterval = v.frame_interval_ms;
   let text, cls;
-  if (d.state === "ready") { text = `Vision: ${d.backends.join(" + ")}`; cls = "ok"; }
-  else if (d.state === "loading") { text = "Vision: loading models…"; cls = "warn"; }
+  if (v.backend === "openrouter") { text = `Vision: OpenRouter ${v.model}`; cls = "ok"; }
+  else if (d.state === "ready") { text = `Vision: local ${d.backends.join(" + ")}`; cls = "ok"; }
+  else if (d.state === "loading") { text = "Vision: loading local models…"; cls = "warn"; }
   else { text = `Vision: ${d.state}`; cls = "bad"; }
-  $("#health").replaceChildren(
-    el("span", { className: `pill ${cls}`, textContent: text, title: JSON.stringify(d.errors || {}) }),
+  const fallback = v.backend === "openrouter" && v.fallback === "local"
+    ? el("span", { className: `pill ${d.state === "ready" ? "ok" : "warn"}`, textContent: `Backup: local YOLO ${d.state}` })
+    : null;
+  $("#health").replaceChildren(...[
+    el("span", { className: `pill ${cls}`, textContent: text, title: v.warning || JSON.stringify(d.errors || {}) }),
+    fallback,
     el("span", { className: `pill ${h.parser.startsWith("openrouter") ? "ok" : "warn"}`, textContent: `Notes: ${h.parser}` }),
-    el("span", { className: "pill ok", textContent: "Images stay on device" }),
-  );
+    v.images_leave_device
+      ? el("span", { className: "pill warn", textContent: "Frames sent to OpenRouter (no-retention providers)" })
+      : el("span", { className: "pill ok", textContent: "Images stay on device" }),
+  ].filter(Boolean));
   if (d.state === "loading" || d.state === "idle") state.healthTimer = setTimeout(pollHealth, 3000);
 }
 
@@ -483,7 +492,8 @@ function readyToCheck() {
 
 async function liveLoop() {
   if (!state.camOn) return;
-  let delay = 400;
+  // OpenRouter is rate-limited server-side (~1.5 s); local YOLO can go faster.
+  let delay = state.frameInterval || 400;
   const v = $("#video");
   if (!state.photoMode && readyToCheck() && v.videoWidth && !document.hidden) {
     // 960 px wide keeps small items (sauce cups, forks) big enough to detect.
@@ -495,7 +505,8 @@ async function liveLoop() {
     try {
       await sendFrame(blob, "live");
     } catch (e) {
-      if (e.code === "loading") { $("#cam-msg").textContent = e.message; delay = 2000; pollHealth(); }
+      if (e.code === "busy") { delay = 500; }
+      else if (e.code === "loading") { $("#cam-msg").textContent = e.message; delay = 2000; pollHealth(); }
       else if (e.status === 409) { /* order sealed meanwhile */ }
       else { $("#cam-msg").textContent = e.message; delay = 3000; }
     }
@@ -530,7 +541,8 @@ async function sendFrame(blob, mode) {
   const r = await authed(`/api/orders/${id}/frame`, { method: "POST", form });
   if (!state.current || state.current.id !== id) return; // switched orders mid-request
   state.lastResult = r;
-  $("#cam-msg").textContent = `${r.boxes.length} objects · frame ${r.frame_sha256.slice(0, 10)}…`;
+  const found = Object.values(r.counts || {}).reduce((a, b) => a + b, 0) || r.boxes.length;
+  $("#cam-msg").textContent = `${found} objects · ${r.model || "vision"}${r.fallback_reason ? ` (OpenRouter failed: ${r.fallback_reason})` : ""} · frame ${r.frame_sha256.slice(0, 10)}…`;
   drawBoxes();
   renderChecklist(r.items);
   if ($("#stage-msg").textContent) updateStageMsg();
@@ -574,7 +586,8 @@ function drawBoxes() {
     ctx.strokeStyle = color;
     ctx.setLineDash(strong ? [] : [6, 4]);
     ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
-    const text = `${b.label} ${Math.round(b.conf * 100)}%`;
+    // LLM boxes have no numeric score, just high/low confidence.
+    const text = b.model === "openrouter" ? `${b.label}${strong ? "" : " (low)"}` : `${b.label} ${Math.round(b.conf * 100)}%`;
     const w = ctx.measureText(text).width + 10;
     const ty = Math.max(0, y1 - 22);
     ctx.fillStyle = color;

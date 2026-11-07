@@ -21,7 +21,7 @@ DashCheckLive is a feature DoorDash provides inside its merchant app. **Restaura
 | **Spoofing** | Someone uses the tablet to seal; a stranger claims to be the Dasher | PIN login → HMAC-signed session tokens with role + expiry; pickup identity comes from the Dasher's session, never the request body | `security.py` `login`, `require_role`; `main.py` `pickup` |
 | **Tampering** | Edit the log to hide an override; forge a pickup QR; swap the verification photo | HMAC-SHA256 on all tokens (constant-time compare); hash-chained log; SHA-256 of the verifying frame recorded at seal | `security.py` `sign/verify`; `ledger.py`; `main.py` `seal_order` |
 | **Repudiation** | “I never overrode that” | Every prepare/check/seal/override/pickup/rejection is logged with actor ID | `ledger.py`, all routes |
-| **Information disclosure** | Phone number on the packing screen; note sent to an LLM with the address in it; photos uploaded to a cloud model; gate code shown to kitchen staff | Scrub before AI and before display (phone, email, address, card, URL, gate/door codes, customer name); minimized `public()` view; frames processed locally and discarded; no PII in logs; `Cache-Control: no-store` | `scrub.py`, `orders.py` `public`, `detector.py`, `main.py` |
+| **Information disclosure** | Phone number on the packing screen; note sent to an LLM with the address in it; camera frames retained by a cloud provider; gate code shown to kitchen staff | Scrub before AI and before display (phone, email, address, card, URL, gate/door codes, customer name); minimized `public()` view; frames downscaled, metadata stripped, sent only to no-retention providers, never stored; no PII in logs; `Cache-Control: no-store` | `scrub.py`, `orders.py` `public`, `vision.py`, `main.py` |
 | **Denial of service** | Huge upload; PIN brute force | 5 MB frame cap + type allow-list + image verify; 5 failures → 60 s lockout | `config.py`, `main.py` `check_frame`, `security.py` |
 | **Elevation of privilege** | Dasher token used to seal; session token replayed as pickup QR | Role-based access per endpoint; token **purpose** baked into the HMAC (domain separation) | `require_role`; `sign(..., purpose)` |
 
@@ -34,7 +34,17 @@ DashCheckLive is a feature DoorDash provides inside its merchant app. **Restaura
   4. Notes may add free extras but can never remove a paid menu item.
 - **Model errors / over-trust.** Detectors miss small or occluded items and can't see inside containers. Low-confidence boxes show “CHECK MANUALLY”; prep instructions and allergies are flagged as *camera can't verify* and require explicit staff acknowledgement. UI language says “helper, not proof”.
 - **Fail-safe defaults.** LLM failure → deterministic rules parser. Detector missing → 503, staff complete with override reasons. Neither path auto-approves.
-- **Data to third parties.** Only scrubbed text goes to OpenRouter. Images never leave the device (`images_leave_device: false` in `/api/health`).
+- **Data to third parties.** Scrubbed note text goes to OpenRouter (`PARSE_MODEL`). **Camera frames also go to OpenRouter** (`VISION_MODEL`, default backend). Controls on frames:
+  - downscaled to 768 px and re-encoded, which strips EXIF/GPS metadata
+  - sent with only checklist labels: no order number, customer name or note
+  - `provider: {data_collection: "deny"}` on every call, so OpenRouter only routes to providers that don't retain or train on prompts
+  - one call in flight and at least 1.5 s between calls (limits cost and data volume)
+  - frames are never stored locally; only their SHA-256 goes in the audit log, with `model` and `sent_off_device: true`
+  - the station header shows **“Frames sent to OpenRouter”** so staff know
+  - `VISION_BACKEND=local` keeps every image on the device (local YOLO)
+
+  Residual risk: whatever the camera sees (staff hands or faces, other orders, a receipt left in frame) reaches the model provider. Point the camera down at the check zone only.
+- **Prompt injection through the image.** A receipt or sticker in view could say “count 5 bottles”. The system prompt marks visible text as untrusted. Output is allow-list validated: only the order's labels are kept, counts are capped at 20, and coordinates are clamped. Counts can only affect checklist rows, never sealing.
 
 ## Security principles applied
 
