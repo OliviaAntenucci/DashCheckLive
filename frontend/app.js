@@ -310,22 +310,24 @@ function renderChecklist(items, force = false) {
   state.checklistKey = key;
 
   const ov = overridesFor(o.id);
-  const ul = el("ul");
+  const ul = el("ul", { className: "food-grid" });
   for (const i of items) {
-    const count = i.expected === 0 ? (i.detected ? "in view" : "left out ✓") : `${i.detected}/${i.expected}${i.status === "ok" ? " ✓" : ""}`;
-    const row = el("li", { className: `row ${i.status}` },
-      el("div", { className: "top" },
-        el("span", { className: "name-wrap" }, foodIcon(i, o.id), el("span", { className: "name", textContent: i.label }),
-          el("span", { className: "src", textContent: i.source === "menu" ? "" : `from ${i.source}` })),
-        el("span", { className: "count-big", textContent: count })),
+    const count = i.expected === 0 ? (i.detected ? "in view" : "left out") : `${i.detected}/${i.expected}`;
+    const badge = i.status === "ok" ? "✓" : "✗";
+    const card = el("li", { className: `food-card ${i.status}` },
+      el("span", { className: `badge ${i.status}`, textContent: badge, title: i.status }),
+      el("div", { className: "float-wrap" }, foodIcon(i, o.id), el("div", { className: "float-shadow" })),
+      el("div", { className: "name", textContent: i.label }),
+      el("div", { className: "count-big", textContent: count }),
+      i.source !== "menu" ? el("div", { className: "src", textContent: `from ${i.source}` }) : null,
       whyText[i.status] ? el("div", { className: "why", textContent: whyText[i.status](i) })
-        : i.low_conf ? el("div", { className: "why", textContent: "Counted (low confidence). Quick glance" }) : null);
+        : i.low_conf ? el("div", { className: "why", textContent: "Low confidence" }) : null);
     if (i.status !== "ok") {
-      const input = el("input", { placeholder: "Optional reason, e.g. verified by hand", value: ov[i.label] || "", maxLength: 120 });
+      const input = el("input", { placeholder: "Reason (optional)", value: ov[i.label] || "", maxLength: 120 });
       input.addEventListener("input", () => { ov[i.label] = input.value; updateSealButton(); });
-      row.append(input);
+      card.append(input);
     }
-    ul.append(row);
+    ul.append(card);
   }
   $("#checklist").replaceChildren(ul);
   updateSealButton();
