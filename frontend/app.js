@@ -131,31 +131,44 @@ async function pollHealth() {
   if (d.state === "loading" || d.state === "idle") state.healthTimer = setTimeout(pollHealth, 3000);
 }
 
+const STATUS_TEXT = { new: "New", prepared: "Checking", sealed: "Sealed", picked_up: "Completed" };
+
 async function refreshQueue() {
   const r = await authed("/api/orders");
   state.orders = r.orders;
   $("#store-name").textContent = r.store;
-  $("#queue-count").textContent = r.orders.filter((o) => o.status !== "picked_up").length;
-  $("#queue").replaceChildren(...r.orders.map((o) => {
-    const statusCls = { new: "", prepared: "warn", sealed: "ok", picked_up: "ok" }[o.status] || "";
-    const li = el("li", {},
-      el("div", {},
-        el("div", {}, el("strong", { textContent: `#${o.id}` }), ` ${o.display_name}`),
-        el("div", { className: "meta", textContent: `${o.restaurant} → ${o.delivery_city}` }),
-        el("div", { className: "meta", textContent: `${o.item_count} item${o.item_count === 1 ? "" : "s"} · ${o.ref} · ${o.dasher_name}` })),
-      el("span", { className: `pill st ${statusCls}`, textContent: o.status.replace("_", " ") }));
-    if (state.current && state.current.id === o.id) li.classList.add("active");
+  const waiting = r.orders.filter((o) => o.status === "new" || o.status === "prepared");
+  $("#queue-sub").textContent = `${waiting.length} waiting · ${r.orders.length} today`;
+  renderQueue();
+}
+
+// Left panel: searchable order list (food icon, name, status, city).
+function renderQueue() {
+  const q = ($("#search").value || "").trim().toLowerCase();
+  const rows = state.orders.filter((o) =>
+    !q || `${o.id} ${o.display_name} ${o.ref} ${o.delivery_city} ${o.dasher_name}`.toLowerCase().includes(q));
+  $("#queue").replaceChildren(...rows.map((o) => {
+    const li = el("li", { className: `order-item${state.current && state.current.id === o.id ? " active" : ""}` },
+      el("span", { className: "avatar" }, KAWAII(o.labels[0]) || "🍽️"),
+      el("div", { className: "oi-main" },
+        el("div", { className: "oi-top" },
+          el("strong", { textContent: o.display_name }),
+          el("span", { className: "oi-id", textContent: `#${o.id}` })),
+        el("div", { className: "oi-city", textContent: `⌖ ${o.delivery_city}` })),
+      el("span", { className: `status-pill ${o.status}`, textContent: STATUS_TEXT[o.status] || o.status }));
     li.addEventListener("click", () => openOrder(o.id));
     return li;
   }));
+  if (!rows.length) $("#queue").replaceChildren(el("li", { className: "muted empty-note", textContent: "No orders match your search." }));
 }
+$("#search").addEventListener("input", renderQueue);
 
 $("#demo-reset").addEventListener("click", async () => {
   await authed("/api/demo/reset", { method: "POST" });
+  for (const k of Object.keys(seenCounts)) delete seenCounts[k];
   state.current = null;
   state.overrides = {};
   clearOverlay();
-  $("#receipt").classList.add("hidden");
   renderSide();
   await refreshQueue();
   refreshLog();
@@ -191,39 +204,42 @@ async function openOrder(id) {
   }
 }
 
+// Right panel: delivery address card + cart (one line per receipt item with a ✓/✗ chip).
 function renderReceipt() {
   const o = state.current;
+  $("#right-empty").classList.toggle("hidden", !!o);
+  $("#right-content").classList.toggle("hidden", !o);
+  if (!o) return;
   const r = o.receipt;
-  const box = $("#receipt");
-  const lines = [];
-  for (const l of r.lines) {
-    lines.push(el("div", { className: "r-line" }, el("span", { textContent: `${l.qty}× ${l.name}` }), el("span", { textContent: money(l.total) })));
-    for (const m of l.modifiers) lines.push(el("div", { className: "r-mod", textContent: `• ${m}` }));
-  }
   const placed = new Date(o.placed_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  $("#addr-line").textContent = o.delivery_address || `${o.delivery_city} (full address after sealing)`;
+  $("#addr-meta").textContent = `Placed ${placed} · Dasher ${o.dasher_name}`;
+  $("#cart-id").textContent = `Order ID: #${o.id}`;
+
+  const mode = o.status === "sealed" || o.status === "picked_up" ? "check"
+    : o.fulfillment.toLowerCase().startsWith("pickup") ? "pickup" : "delivery";
+  for (const s of document.querySelectorAll(".mode-toggle span")) s.classList.toggle("on", s.dataset.mode === mode);
+
+  const byLabel = Object.fromEntries((o.checklist || []).map((i) => [i.label, i]));
+  $("#receipt").replaceChildren(...r.lines.map((l) => {
+    const row = byLabel[l.detect];
+    const state_ = o.status === "new" || !row ? "wait" : row.status === "ok" ? "ok" : "no";
+    return el("div", { className: "cart-line" },
+      el("span", { className: "cart-img" }, KAWAII(l.detect) || "🍽️"),
+      el("div", { className: "cart-info" },
+        el("strong", { textContent: l.name }),
+        el("div", { className: "cart-sub", textContent: l.modifiers.join(" · ") || money(l.total) }),
+        el("div", { className: "qty" }, el("span", { className: "q-btn", textContent: "−" }), el("span", { textContent: String(l.qty) }),
+          el("span", { className: "q-btn", textContent: "+" }))),
+      el("span", { className: `cart-chip ${state_}`, textContent: state_ === "ok" ? "✓" : state_ === "no" ? "✗" : "…" }));
+  }));
+
   const red = Object.entries(o.redactions || {}).map(([k, n]) => `${n}× ${k}`).join(", ");
-  box.replaceChildren(
-    el("div", { className: "r-demo", textContent: "SAMPLE RECEIPT · DEMO DATA" }),
-    el("div", { className: "r-center", textContent: "DoorDash order" }),
-    el("div", { className: "r-center r-big", textContent: `#${o.id} · ${o.display_name}` }),
-    el("div", { className: "r-center r-muted", textContent: `${o.store}` }),
-    el("div", { className: "r-center r-muted", textContent: `${o.ref} · ${o.fulfillment} · ${placed}` }),
-    el("hr"),
-    ...lines,
-    el("hr"),
-    el("div", { className: "r-line" }, el("span", { textContent: "Subtotal" }), el("span", { textContent: money(r.subtotal) })),
-    el("div", { className: "r-line" }, el("span", { textContent: "Tax" }), el("span", { textContent: money(r.tax) })),
-    el("div", { className: "r-line r-total" }, el("span", { textContent: "Total" }), el("span", { textContent: money(r.total) })),
-    el("hr"),
-    el("div", { className: "r-muted", textContent: "Customer note" }),
-    el("div", { className: "r-note", textContent: o.status === "new" ? "(hidden until personal info is removed)" : (o.note || "(none)") }),
-    red ? el("div", { className: "r-muted", textContent: `Removed: ${red}` }) : null,
-    el("hr"),
-    el("div", { className: "r-line" }, el("span", { textContent: "Deliver to" }), el("span", { textContent: o.delivery_city })),
-    el("div", { className: "r-line" }, el("span", { textContent: "Dasher" }), el("span", { textContent: o.dasher_name })),
-    el("div", { className: "r-muted", textContent: "Customer contact hidden from merchant" }),
-  );
-  box.classList.remove("hidden");
+  $("#note-text").textContent = o.status === "new" ? "Removing personal info…" : (o.note || "No note");
+  $("#note-redact").textContent = red ? `Removed before AI: ${red}` : "";
+  $("#t-sub").textContent = money(r.subtotal);
+  $("#t-tax").textContent = money(r.tax);
+  $("#t-total").textContent = money(r.total);
 }
 
 function renderSide() {
@@ -249,14 +265,19 @@ function renderSide() {
 
   const done = $("#done-box");
   done.classList.add("hidden");
+  renderReceipt();
   if (!o) {
-    $("#checklist").replaceChildren(el("p", { className: "muted", textContent: "Pick an order on the left." }));
+    $("#checklist").replaceChildren(el("p", { className: "muted empty-note", textContent: "Pick an order from the list on the left." }));
+    $("#checklist-sub").textContent = "Items appear here once an order is open";
+    $("#check-sub").textContent = "Pick an order to start";
     setBanner(null);
     updateStageMsg();
     return;
   }
+  $("#check-sub").textContent = `Order #${o.id} · ${o.display_name} · ${STATUS_TEXT[o.status] || o.status}`;
   if (o.status === "sealed" || o.status === "picked_up") {
-    $("#checklist").replaceChildren();
+    $("#checklist").replaceChildren(el("p", { className: "muted empty-note", textContent: "This order is sealed. Pick the next one on the left." }));
+    $("#checklist-sub").textContent = o.status === "sealed" ? "Sealed, waiting for Dasher" : "Picked up ✓";
     const s = o.seal || {};
     done.replaceChildren(
       el("strong", { textContent: o.status === "sealed" ? "Sealed, waiting for Dasher" : "Picked up ✓" }),
@@ -330,6 +351,9 @@ function renderChecklist(items, force = false) {
     ul.append(card);
   }
   $("#checklist").replaceChildren(ul);
+  const okN = items.filter((i) => i.status === "ok").length;
+  $("#checklist-sub").textContent =`${okN} of ${items.length} items detected`;
+  renderReceipt(); // refresh the ✓/✗ chips in the cart
   updateSealButton();
 }
 
@@ -394,6 +418,7 @@ $("#recount").addEventListener("click", async () => {
   if (!o || o.status !== "prepared") return;
   try {
     state.current = await authed(`/api/orders/${o.id}/recount`, { method: "POST" });
+    delete seenCounts[o.id];
     state.checklistKey = "";
     clearOverlay();
     renderSide();
@@ -701,7 +726,7 @@ async function sendFrame(blob, mode) {
   state.lastResult = r;
   const found = Object.values(r.counts || {}).reduce((a, b) => a + b, 0) || r.boxes.length;
   $("#cam-msg").textContent = `${found} objects · ${r.model || "vision"}${r.fallback_reason ? ` (OpenRouter failed: ${r.fallback_reason})` : ""} · frame ${r.frame_sha256.slice(0, 10)}…`;
-  drawBoxes();
+  announceDetections(id, r.items);
   renderChecklist(r.items);
   if ($("#stage-msg").textContent) updateStageMsg();
   refreshLog();
@@ -709,53 +734,35 @@ async function sendFrame(blob, mode) {
 
 function clearOverlay() {
   state.lastResult = null;
-  const c = $("#overlay");
-  c.getContext("2d").clearRect(0, 0, c.width, c.height);
   $("#banner").classList.add("hidden");
   $("#cam-msg").textContent = "";
 }
 
-function drawBoxes() {
-  const r = state.lastResult;
-  const c = $("#overlay");
-  const dpr = window.devicePixelRatio || 1;
-  const cw = c.clientWidth, ch = c.clientHeight;
-  c.width = cw * dpr;
-  c.height = ch * dpr;
-  const ctx = c.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, cw, ch);
-  if (!r) return;
-  // Media is drawn with object-fit: contain; find where it actually sits.
-  const media = state.photoMode ? $("#photo") : $("#video");
-  const nw = media.videoWidth || media.naturalWidth || r.width;
-  const nh = media.videoHeight || media.naturalHeight || r.height;
-  const s = Math.min(cw / nw, ch / nh);
-  const ox = (cw - nw * s) / 2, oy = (ch - nh * s) / 2;
-  const k = (nw / r.width) * s;
-  // Every box counts; low-confidence ones are drawn dashed orange so staff can glance at them.
-  const confident = (r.thresholds && r.thresholds.confident) || 0.25;
-  ctx.lineWidth = 3;
-  ctx.font = "bold 15px system-ui";
-  for (const b of r.boxes) {
-    const [x1, y1, x2, y2] = b.box.map((v, i) => (i % 2 ? oy : ox) + v * k);
-    const strong = b.conf >= confident;
-    const color = strong ? "#2ecc71" : "#f5a623";
-    ctx.strokeStyle = color;
-    ctx.setLineDash(strong ? [] : [6, 4]);
-    ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
-    // LLM boxes have no numeric score, just high/low confidence.
-    const text = b.model === "openrouter" ? `${b.label}${strong ? "" : " (low)"}` : `${b.label} ${Math.round(b.conf * 100)}%`;
-    const w = ctx.measureText(text).width + 10;
-    const ty = Math.max(0, y1 - 22);
-    ctx.fillStyle = color;
-    ctx.fillRect(x1, ty, w, 22);
-    ctx.fillStyle = "#000";
-    ctx.fillText(text, x1 + 5, ty + 16);
+// Instead of boxes on the video: a short "Bottle detected!" toast whenever an
+// item's count goes up. Counts are sticky, so each item announces once per unit.
+const seenCounts = {}; // orderId -> {label: last detected}
+
+function announceDetections(orderId, items) {
+  const seen = (seenCounts[orderId] = seenCounts[orderId] || {});
+  for (const i of items) {
+    if (i.expected > 0 && i.detected > (seen[i.label] || 0)) {
+      showToast(i);
+    }
+    seen[i.label] = i.detected;
   }
-  ctx.setLineDash([]);
 }
-window.addEventListener("resize", drawBoxes);
+
+function showToast(item) {
+  const box = $("#toasts");
+  const name = item.label.charAt(0).toUpperCase() + item.label.slice(1);
+  const extra = item.expected > 1 ? ` (${Math.min(item.detected, item.expected)}/${item.expected})` : "";
+  const toast = el("div", { className: "toast" },
+    el("span", { className: "t-icon" }, KAWAII(item.label) || (FOOD_ICONS[item.label] || "🍽️")),
+    el("span", { textContent: `${name} detected!${extra}` }));
+  box.append(toast);
+  while (box.children.length > 4) box.firstChild.remove();
+  setTimeout(() => toast.remove(), 2600);
+}
 
 // ---------------- audit log ----------------
 

@@ -27,7 +27,9 @@ Return ONLY a JSON object with exactly these keys:
 }}
 Allowed labels for extras/exclude: {sorted(NOTE_EXTRAS)}.
 "sauce cup" covers any dip, dressing or sauce (ranch, ketchup, mayo...).
-"fork" covers utensils/cutlery. Use [] or {{}} when nothing applies."""
+"fork" covers utensils/cutlery. Use [] or {{}} when nothing applies.
+Only add an extra when the customer explicitly asks for it. Never infer utensils or sauces
+from delivery instructions, greetings or thanks (e.g. "leave at the front desk, thanks!" → no extras)."""
 
 
 def _clean(raw: object) -> dict:

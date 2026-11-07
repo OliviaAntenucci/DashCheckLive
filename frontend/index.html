@@ -15,10 +15,10 @@
       <div class="brand big">DashCheck<span>Live</span></div>
       <p class="login-sub">Make sure every order is complete before it leaves your restaurant. The camera checks the items against the order, so fewer meals go out missing something.</p>
       <ol class="steps">
-        <li><strong>Sign in</strong> with your staff ID and PIN.</li>
-        <li><strong>Pick an order</strong> and lay its items in front of the camera. Each item is checked off as it's counted.</li>
-        <li><strong>Finalize the order</strong>: tick “I'm done” and seal it.</li>
-        <li><strong>Hand it off.</strong> The Dasher scans the pickup code and takes the order.</li>
+        <li><span><strong>Sign in</strong> with your staff ID and PIN.</span></li>
+        <li><span><strong>Pick an order</strong> and lay its items in front of the camera. Each item is checked off as it's counted.</span></li>
+        <li><span><strong>Finalize the order</strong>: tick “I'm done” and seal it.</span></li>
+        <li><span><strong>Hand it off.</strong> The Dasher scans the pickup code and takes the order.</span></li>
       </ol>
       <p class="login-sub small">Dashers: sign in with your Dasher ID to confirm a pickup.</p>
       <form id="login-form" autocomplete="off">
@@ -45,57 +45,113 @@
 
   <!-- ============ Packing station (restaurant staff) ============ -->
   <section id="view-station" class="view station hidden">
-    <header class="station-bar">
-      <div class="brand">DashCheck<span>Live</span></div>
-      <div id="store-name" class="store"></div>
-      <!-- Model status still loads (sets the camera frame rate) but isn't shown. -->
-      <div id="health" class="health hidden"></div>
-      <div class="bar-actions">
-        <span id="who" class="who"></span>
-        <button id="open-log" class="btn ghost small">Audit log</button>
-        <button id="demo-reset" class="btn ghost small">Reset demo</button>
-        <button id="logout" class="btn ghost small">Sign out</button>
-      </div>
-    </header>
+    <div class="app-frame">
 
-    <div class="station-grid">
-      <!-- Left: queue + receipt -->
-      <aside class="panel left">
-        <div class="panel-title">Orders <span id="queue-count" class="count"></span></div>
-        <ul id="queue" class="queue"></ul>
-        <div id="receipt" class="receipt hidden"></div>
+      <!-- ===== Left: orders ===== -->
+      <aside class="orders-panel">
+        <div class="brand">DashCheck<span>Live</span></div>
+        <div class="sec-head">
+          <div><h3>Orders</h3><p id="queue-sub" class="sec-sub"><span id="queue-count">0</span> waiting</p></div>
+        </div>
+        <div class="search">
+          <input id="search" placeholder="Search name, #, city" autocomplete="off">
+          <span class="search-btn">⌕</span>
+        </div>
+        <ul id="queue" class="order-list"></ul>
       </aside>
 
-      <!-- Center: full-height camera -->
-      <div class="camera-pane">
-        <div id="stage" class="stage">
-          <video id="video" autoplay playsinline muted></video>
-          <img id="photo" class="hidden" alt="Uploaded check photo">
-          <canvas id="overlay"></canvas>
-          <div id="banner" class="banner hidden"></div>
-          <div id="stage-msg" class="stage-msg">Starting camera…</div>
+      <!-- ===== Main column ===== -->
+      <main class="main">
+        <div class="topbar">
+          <div class="store-chip"><span class="dot"></span><span id="store-name"></span></div>
+          <!-- Model status still loads (sets the camera frame rate) but isn't shown. -->
+          <div id="health" class="health hidden"></div>
+          <div class="top-actions">
+            <span id="who" class="who"></span>
+            <button id="open-log" class="pill-btn">Audit log</button>
+            <button id="demo-reset" class="pill-btn">Reset demo</button>
+            <button id="logout" class="pill-btn">Sign out</button>
+          </div>
         </div>
-        <div class="camera-controls">
-          <select id="camera-select" title="Camera"></select>
-          <button id="cam-toggle" class="btn ghost small">Pause</button>
-          <label class="btn ghost small">Upload photo<input id="upload" type="file" accept="image/jpeg,image/png,image/webp"></label>
-          <span id="cam-msg" class="cam-msg"></span>
-        </div>
-      </div>
 
-      <!-- Right: checklist + seal -->
-      <aside class="panel right">
-        <div class="panel-title title-row">Packing checklist <button id="recount" class="btn ghost small hidden" title="Start counting this order from zero">Reset counts</button></div>
-        <div id="allergy" class="allergy hidden"></div>
-        <div id="prep" class="prep hidden"></div>
-        <div id="checklist" class="checklist"><p class="muted">Pick an order on the left.</p></div>
+        <!-- Live camera -->
+        <section class="sec">
+          <div class="sec-head">
+            <div><h3>Live Check</h3><p id="check-sub" class="sec-sub">Pick an order to start</p></div>
+            <div class="cam-tools">
+              <select id="camera-select" title="Camera"></select>
+              <button id="cam-toggle" class="pill-btn">Pause</button>
+              <label class="pill-btn">Upload<input id="upload" type="file" accept="image/jpeg,image/png,image/webp"></label>
+            </div>
+          </div>
+          <div id="stage" class="stage">
+            <video id="video" autoplay playsinline muted></video>
+            <img id="photo" class="hidden" alt="Uploaded check photo">
+            <div id="toasts" class="toasts" aria-live="polite"></div>
+            <div id="banner" class="banner hidden"></div>
+            <div id="stage-msg" class="stage-msg">Starting camera…</div>
+            <span id="cam-msg" class="cam-msg"></span>
+          </div>
+        </section>
 
-        <div id="seal-box" class="seal hidden">
-          <label class="check"><input type="checkbox" id="confirm"> I'm done: I checked this order, including prep &amp; allergy notes</label>
-          <button id="seal" class="btn primary wide" disabled>Seal &amp; release to Dasher</button>
-          <p id="seal-error" class="error"></p>
+        <!-- Packing checklist: dish cards like "Popular Dishes" -->
+        <section class="sec">
+          <div class="sec-head">
+            <div><h3>Packing Checklist</h3><p id="checklist-sub" class="sec-sub">Items appear here once an order is open</p></div>
+            <button id="recount" class="view-more hidden" title="Start counting this order from zero">Reset counts <span>↻</span></button>
+          </div>
+          <div id="checklist" class="checklist"></div>
+        </section>
+      </main>
+
+      <!-- ===== Right panel: address + cart ===== -->
+      <aside class="cart-panel">
+        <div id="right-empty" class="right-empty">
+          <div class="big-emoji">🛍️</div>
+          <p>Select an order to see its delivery details and cart.</p>
         </div>
-        <div id="done-box" class="done hidden"></div>
+
+        <div id="right-content" class="hidden">
+          <div class="addr-card">
+            <div class="addr-title">DELIVERY ADDRESS</div>
+            <div class="addr-line"><span class="pin">⌖</span><span id="addr-line"></span></div>
+            <div class="addr-line muted"><span class="pin">◷</span><span id="addr-meta"></span></div>
+          </div>
+
+          <div class="cart-head">
+            <div class="cart-title"><span class="cart-ico">🛒</span> Cart</div>
+            <div id="cart-id" class="cart-id"></div>
+          </div>
+
+          <div class="mode-toggle">
+            <span data-mode="delivery">Delivery</span><span data-mode="pickup">Pickup</span><span data-mode="check">Checked</span>
+          </div>
+
+          <div id="allergy" class="allergy hidden"></div>
+          <div id="receipt" class="cart-lines"></div>
+
+          <div class="ticket-cut"></div>
+
+          <div class="note-row">
+            <span class="note-label">Customer note</span>
+            <span id="note-text" class="note-code"></span>
+          </div>
+          <div id="note-redact" class="small muted"></div>
+          <div id="prep" class="prep hidden"></div>
+
+          <div class="totals">
+            <div><span>Sub Total</span><span id="t-sub"></span></div>
+            <div><span>Tax</span><span id="t-tax"></span></div>
+            <div class="grand"><span>TOTAL</span><span id="t-total"></span></div>
+          </div>
+
+          <div id="seal-box" class="seal hidden">
+            <label class="check"><input type="checkbox" id="confirm"> I'm done: I checked this order, including prep &amp; allergy notes</label>
+            <button id="seal" class="confirm-btn" disabled>Seal &amp; Release</button>
+            <p id="seal-error" class="error"></p>
+          </div>
+          <div id="done-box" class="done hidden"></div>
+        </div>
       </aside>
     </div>
 

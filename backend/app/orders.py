@@ -130,7 +130,9 @@ class Order:
         self.parsed = parsed
         self.expected, self.sources = self.base_expected()
         for label, n in parsed["extras"].items():
-            if n > 0:
+            # The receipt is the source of truth: if it already includes this item
+            # (e.g. a fork), a note can't add more on top of it.
+            if n > 0 and label not in self.expected:
                 self.expected[label] = self.expected.get(label, 0) + n
                 self.sources.setdefault(label, "note")
         # A note can ask to leave out a free extra, but not a paid item.
