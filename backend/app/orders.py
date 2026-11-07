@@ -98,6 +98,9 @@ class Order:
     def item_count(self) -> int:
         return sum(it["qty"] for it in self.items)
 
+    def labels(self) -> list[str]:
+        return sorted({MENU[it["menu"]]["detect"] for it in self.items})
+
     def item_names(self) -> list[str]:
         return [MENU[it["menu"]]["name"] for it in self.items]
 
@@ -167,6 +170,9 @@ class Order:
             "parsed": self.parsed,
             "last_check": self.last_check,
             "seal": self.seal,
+            # Need-to-know: the street address is revealed only once the order is
+            # sealed (for the bag label/handoff). Phone never leaves the server.
+            "delivery_address": self.customer.get("address") if self.status in ("sealed", "picked_up") else None,
         }
 
 

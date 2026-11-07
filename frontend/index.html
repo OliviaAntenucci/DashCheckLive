@@ -109,14 +109,37 @@
       <ol id="log"></ol>
     </div>
 
-    <!-- Seal / QR modal -->
-    <div id="qr-modal" class="modal hidden">
-      <div class="modal-card">
-        <h2>Order sealed ✓</h2>
-        <p id="qr-sub" class="muted"></p>
-        <img id="qr" alt="One-time pickup QR code">
-        <p class="small muted">Signed · one-time · expires in <span id="qr-ttl"></span> · only valid for the assigned Dasher</p>
-        <div class="sim">
+  </section>
+
+  <!-- ============ Order complete page ============ -->
+  <section id="view-done" class="view done-view hidden">
+    <header class="station-bar">
+      <button id="qr-close-x" class="btn ghost small">← Back to station</button>
+      <div class="brand">DashCheck<span>Live</span></div>
+      <div id="done-store" class="store"></div>
+    </header>
+      <div class="done-card">
+        <div class="done-head">
+          <div>
+            <h2>Order <span id="done-id"></span> sealed <span class="ok-dot">✓</span></h2>
+            <p id="qr-sub" class="muted"></p>
+          </div>
+        </div>
+
+        <div class="done-grid">
+          <!-- 1. Where it goes + what to do -->
+          <section class="done-col">
+            <div class="label">Deliver to</div>
+            <div id="done-address" class="address"></div>
+
+            <div class="label">Next steps</div>
+            <ol id="next-steps" class="next-steps"></ol>
+
+            <div class="qr-wrap">
+              <img id="qr" alt="One-time pickup QR code">
+              <p class="small muted">Signed · one-time · expires in <span id="qr-ttl"></span><br>Only valid for the assigned Dasher</p>
+            </div>
+            <div class="sim">
           <div class="label">Dasher scan (simulated)</div>
           <div class="sim-row">
             <select id="sim-dasher">
@@ -129,13 +152,24 @@
             <button id="sim-scan" class="btn">Scan</button>
           </div>
           <div id="sim-result" class="sim-result"></div>
-        </div>
-        <div class="modal-actions">
-          <button id="copy-code" class="btn ghost small">Copy pickup code</button>
-          <button id="qr-close" class="btn primary">Next order →</button>
+            </div>
+            <button id="copy-code" class="btn ghost small wide">Copy pickup code</button>
+          </section>
+
+          <!-- 2. Completed receipt -->
+          <section class="done-col">
+            <div class="label">Completed receipt</div>
+            <div id="done-receipt" class="receipt done-receipt"></div>
+          </section>
+
+          <!-- 3. Up next -->
+          <section class="done-col">
+            <div class="label">Up next</div>
+            <ul id="next-orders" class="next-orders"></ul>
+            <button id="qr-close" class="btn primary wide">Start next order →</button>
+          </section>
         </div>
       </div>
-    </div>
   </section>
 
   <!-- ============ Dasher pickup ============ -->

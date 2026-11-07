@@ -49,7 +49,7 @@ DashCheckLive is a feature DoorDash provides inside its merchant app. **Restaura
 ## Security principles applied
 
 - **Least privilege** — two roles, each endpoint allows exactly one; Dashers see only their pickup result.
-- **Data minimization** — packing screen gets first name + last initial, items, scrubbed note. Contact details stay server-side.
+- **Data minimization / need-to-know** — while packing, the screen gets first name + last initial, items, scrubbed note and delivery city only. The street address is revealed only **after** the order is sealed, on the completion screen, for labeling the bag and handoff. The phone number never leaves the server. The address is never sent to any AI model.
 - **Defense in depth** — prompt hardening + output validation + no-authority model + human seal.
 - **Zero trust on inputs** — notes, images, tokens and LLM output are all validated before use.
 - **Secure by default** — random signing key if none configured; seal disabled until rules are met (and re-checked server-side).

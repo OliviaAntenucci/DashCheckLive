@@ -54,7 +54,7 @@ function authed(path, opts = {}) {
 }
 
 function show(view) {
-  for (const v of ["#view-login", "#view-station", "#view-dasher"]) $(v).classList.toggle("hidden", v !== view);
+  for (const v of ["#view-login", "#view-station", "#view-done", "#view-dasher"]) $(v).classList.toggle("hidden", v !== view);
 }
 
 function money(n) { return `$${n.toFixed(2)}`; }
@@ -87,8 +87,8 @@ function signOut(message = "") {
   state.session = null;
   state.current = null;
   try { sessionStorage.removeItem("dcl-session"); } catch {}
-  $("#qr-modal").classList.add("hidden");
   $("#log-drawer").classList.add("hidden");
+  if (location.hash) history.replaceState(null, "", location.pathname);
   $("#login-error").textContent = message;
   show("#view-login");
 }
@@ -405,15 +405,139 @@ $("#recount").addEventListener("click", async () => {
 
 // ---------------- QR modal + simulated Dasher scan ----------------
 
-function openQrModal(r) {
+async function openQrModal(r) {
+  const o = r.order;
+  $("#done-id").textContent = `#${o.id}`;
+  $("#qr-sub").textContent = `${o.display_name} · ${o.store} · Dasher ${o.dasher_name}`;
+  $("#done-address").textContent = o.delivery_address || o.delivery_city;
   $("#qr").src = r.qr_png;
-  $("#qr-sub").textContent = `Order #${r.order.id} for ${r.order.display_name} · assigned to ${r.order.dasher_name} (${r.order.dasher_id})`;
   $("#qr-ttl").textContent = `${Math.round(r.expires_in / 60)} min`;
-  $("#sim-dasher").value = r.order.dasher_id;
+  $("#sim-dasher").value = o.dasher_id;
   $("#sim-pin").value = "";
   $("#sim-result").textContent = "";
   $("#sim-result").className = "sim-result";
-  $("#qr-modal").classList.remove("hidden");
+  $("#done-store").textContent = o.store;
+  renderNextSteps(o);
+  renderCompletedReceipt(o);
+  // Separate page: camera off, own history entry so the browser Back button returns.
+  stopCamera();
+  $("#log-drawer").classList.add("hidden");
+  show("#view-done");
+  history.pushState({ view: "done" }, "", "#complete");
+  window.scrollTo(0, 0);
+  await refreshQueue().catch(() => {});
+  renderNextOrders(o.id);
+}
+
+function closeDone(fromPopState = false) {
+  if ($("#view-done").classList.contains("hidden")) return;
+  show("#view-station");
+  if (!fromPopState && location.hash === "#complete") history.back();
+  startCamera($("#camera-select").value || undefined);
+}
+$("#qr-close-x").addEventListener("click", () => closeDone());
+window.addEventListener("popstate", () => closeDone(true));
+
+function renderNextSteps(o) {
+  const items = o.receipt.lines.reduce((n, l) => n + l.qty, 0);
+  const steps = [
+    ["Bag it", "Put the checked items in the bag and seal it."],
+    ["Label it", `Write or stick on the bag: #${o.id} · ${o.display_name} · ${items} item${items === 1 ? "" : "s"}.`],
+    ["Shelf it", "Place the bag on the pickup shelf."],
+    ["Hand it off", `${o.dasher_name} scans the pickup QR below. Only they can take it.`],
+  ];
+  $("#next-steps").replaceChildren(...steps.map(([title, text], idx) => {
+    const done = idx === 3 && o.status === "picked_up";
+    const li = el("li", { className: done ? "done" : "" },
+      el("span", { className: "tick", textContent: done ? "✓" : String(idx + 1) }),
+      el("div", {}, el("strong", { textContent: title }), el("div", { className: "small muted", textContent: text })));
+    // Staff can tap steps off as they go (local only).
+    li.addEventListener("click", () => {
+      li.classList.toggle("done");
+      li.querySelector(".tick").textContent = li.classList.contains("done") ? "✓" : String(idx + 1);
+    });
+    return li;
+  }));
+}
+
+function renderCompletedReceipt(o) {
+  const r = o.receipt;
+  const seal = o.seal || {};
+  const byLabel = Object.fromEntries((o.checklist || []).map((i) => [i.label, i]));
+  const sealedAt = seal.ts ? new Date(seal.ts * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+
+  const verify = (label) => {
+    const row = byLabel[label];
+    if (seal.overrides && seal.overrides[label]) return el("span", { className: "v v-over", textContent: "✋ staff" });
+    if (row && row.status === "ok") return el("span", { className: "v v-ok", textContent: "📷 ✓" });
+    return el("span", { className: "v v-over", textContent: "✋ staff" });
+  };
+
+  const lines = [];
+  for (const l of r.lines) {
+    lines.push(el("div", { className: "dr-line" },
+      el("span", { className: "dr-icon" }, KAWAII(l.detect) || ""),
+      el("span", { className: "dr-name" }, el("strong", { textContent: `${l.qty}× ${l.name}` }),
+        ...l.modifiers.map((m) => el("div", { className: "r-mod", textContent: m }))),
+      verify(l.detect),
+      el("span", { className: "dr-price", textContent: money(l.total) })));
+  }
+  // Extras the customer's note or modifiers added (no price line of their own).
+  const extras = (o.checklist || []).filter((i) => i.source !== "menu" && i.expected > 0);
+  for (const i of extras) {
+    lines.push(el("div", { className: "dr-line extra" },
+      el("span", { className: "dr-icon" }, KAWAII(i.label) || ""),
+      el("span", { className: "dr-name", textContent: `${i.expected}× ${i.label} (from ${i.source})` }),
+      verify(i.label),
+      el("span", { className: "dr-price", textContent: "" })));
+  }
+  const overrides = Object.entries(seal.overrides || {});
+
+  $("#done-receipt").replaceChildren(
+    el("div", { className: "dr-head" },
+      el("div", { className: "dr-store", textContent: o.store }),
+      el("div", { className: "dr-big", textContent: `#${o.id} · ${o.display_name}` }),
+      el("div", { className: "r-muted", textContent: `${o.ref} · ${o.fulfillment} · sealed ${sealedAt}` }),
+      el("div", { className: "dr-stamp", textContent: "VERIFIED & SEALED" })),
+    el("hr"),
+    ...lines,
+    el("hr"),
+    el("div", { className: "r-line" }, el("span", { textContent: "Subtotal" }), el("span", { textContent: money(r.subtotal) })),
+    el("div", { className: "r-line" }, el("span", { textContent: "Tax" }), el("span", { textContent: money(r.tax) })),
+    el("div", { className: "r-line r-total" }, el("span", { textContent: "Total" }), el("span", { textContent: money(r.total) })),
+    el("hr"),
+    el("div", { className: "r-line" }, el("span", { textContent: "Sealed by" }), el("span", { textContent: seal.staff_id || "-" })),
+    el("div", { className: "r-line" }, el("span", { textContent: "Camera match" }),
+      el("span", { textContent: overrides.length ? `${overrides.length} staff override${overrides.length > 1 ? "s" : ""}` : "all items ✓" })),
+    ...overrides.map(([k, v]) => el("div", { className: "r-mod", textContent: `${k}: ${v}` })),
+    seal.frame_sha256 ? el("div", { className: "r-muted dr-hash", textContent: `Evidence frame sha256 ${seal.frame_sha256.slice(0, 16)}…` }) : null,
+    el("hr"),
+    el("div", { className: "r-line" }, el("span", { textContent: "Deliver to" }), el("span", { className: "dr-addr", textContent: o.delivery_address || o.delivery_city })),
+    el("div", { className: "r-line" }, el("span", { textContent: "Dasher" }), el("span", { textContent: o.dasher_name })),
+  );
+}
+
+function renderNextOrders(currentId) {
+  const waiting = state.orders.filter((o) => o.id !== currentId && (o.status === "new" || o.status === "prepared"));
+  const ul = $("#next-orders");
+  if (!waiting.length) {
+    ul.replaceChildren(el("li", { className: "caught-up", textContent: "All caught up 🎉 No orders waiting." }));
+    $("#qr-close").textContent = "Done";
+    return;
+  }
+  $("#qr-close").textContent = `Start #${waiting[0].id} →`;
+  ul.replaceChildren(...waiting.map((o) => {
+    const icons = el("div", { className: "mini-icons" },
+      ...o.labels.slice(0, 5).map((l) => el("span", { className: "mini-icon" }, KAWAII(l) || "🍽️")));
+    const li = el("li", { className: "next-card" },
+      icons,
+      el("div", { className: "next-info" },
+        el("strong", { textContent: `#${o.id} ${o.display_name}` }),
+        el("div", { className: "small muted", textContent: `${o.item_count} item${o.item_count === 1 ? "" : "s"} · ${o.delivery_city} · ${o.dasher_name}` })),
+      el("span", { className: `pill ${o.status === "prepared" ? "warn" : ""}`, textContent: o.status === "prepared" ? "in progress" : "new" }));
+    li.addEventListener("click", () => { closeDone(); openOrder(o.id); });
+    return li;
+  }));
 }
 
 async function pickupAs(token, pickupToken) {
@@ -432,6 +556,7 @@ $("#sim-scan").addEventListener("click", async () => {
     if (state.current && state.current.id === r.order_id) {
       state.current = await authed(`/api/orders/${r.order_id}`);
       renderSide();
+      renderNextSteps(state.current); // marks "Hand it off" done
     }
   } catch (e) {
     out.textContent = `✗ ${e.message}`;
@@ -448,8 +573,9 @@ $("#copy-code").addEventListener("click", async () => {
 });
 
 $("#qr-close").addEventListener("click", () => {
-  $("#qr-modal").classList.add("hidden");
-  const next = state.orders.find((o) => o.status === "new" || o.status === "prepared");
+  closeDone();
+  const currentId = state.current && state.current.id;
+  const next = state.orders.find((o) => o.id !== currentId && (o.status === "new" || o.status === "prepared"));
   if (next) openOrder(next.id);
 });
 
@@ -683,6 +809,9 @@ $("#scan").addEventListener("click", async () => {
 // ---------------- boot ----------------
 
 (function restore() {
+  // The completion page needs the one-time QR from the seal response, which isn't
+  // kept anywhere, so a refresh lands back on the station.
+  if (location.hash) history.replaceState(null, "", location.pathname);
   let s = null;
   try { s = JSON.parse(sessionStorage.getItem("dcl-session") || "null"); } catch {}
   if (s && s.token) startSession(s);
