@@ -1,0 +1,116 @@
+DashCheckLive — Product Requirements Document
+=============================================
+Status: Hackathon prototype (v0.1)    Date: 2026-11-07
+
+1. PROBLEM
+----------
+During peak periods restaurant staff juggle orders from multiple sources while
+packing food, checking items and coordinating pickups. This takes significant
+labour and constant communication, and leads to missing items, mixed-up orders
+and incorrect handoffs. Missing items cost the restaurant refunds and ratings,
+cost DoorDash support contacts and redeliveries, and cost customers their meal
+(or, for allergy notes, their safety).
+
+Focus area: PICKUP ERRORS: fewer missing items and wrong handoffs.
+
+2. SOLUTION
+-----------
+DashCheckLive is a feature DoorDash provides inside the merchant app at the final
+packing step. Restaurant staff:
+  a) get a packing checklist built from the order AND the customer's free-text
+     note (personal data removed before any AI sees it),
+  b) lay items out in a check zone where a local camera model counts them and
+     flags what looks missing,
+  c) confirm (or override with a reason) and seal the order,
+  d) hand off only to the assigned Dasher, who must scan a one-time signed QR.
+Every step is recorded in a tamper-evident log.
+
+AI assists; people decide. The model never seals an order.
+
+3. USERS
+--------
+  Primary   Restaurant packer / expo staff (merchant_staff role). Busy, gloved
+            hands, needs glanceable status and one-tap actions.
+  Secondary Dasher (dasher role). Needs a fast, unambiguous pickup.
+  Tertiary  Restaurant owner / DoorDash support. Needs evidence when a customer
+            reports a missing item.
+
+4. USER STORIES
+---------------
+  US1  As a packer, I see exactly which items, extras and utensils go in the bag,
+       including those buried in the customer note ("extra ranch pls").
+  US2  As a packer, I'm warned when an item I laid out appears missing, before
+       the bag is closed.
+  US3  As a packer, I see allergy flags and prep requests the camera can't check,
+       and must acknowledge them.
+  US4  As a packer, I can override the camera with a reason when it's wrong.
+  US5  As a Dasher, I can only pick up orders assigned to me, and only once.
+  US6  As an owner/support agent, I can see who sealed an order, whether vision
+       agreed, any overrides, and who picked it up, and trust it wasn't edited.
+  US7  As a customer, my phone number and address aren't shown on kitchen screens
+       or sent to AI services.
+
+5. FUNCTIONAL REQUIREMENTS
+--------------------------
+  FR1  Staff and Dasher authenticate; each API endpoint is restricted to one role.
+  FR2  Customer notes are scrubbed (phone, email, address, card, URL, customer
+       name) before display or any external call. Redaction counts are shown.
+  FR3  Scrubbed note is parsed into: extras, exclusions, prep instructions,
+       allergy flags. LLM via OpenRouter; deterministic rules fallback.
+  FR4  LLM output is validated against an allow-list; notes cannot remove paid
+       items; parser used is recorded.
+  FR5  Camera frames (~2 fps) or an uploaded photo are processed locally by an
+       open-vocabulary detector using labels derived from the order.
+  FR6  Counts are smoothed (median of last 5 frames); boxes >= 0.35 confidence
+       count; 0.20–0.35 produce "check manually".
+  FR7  Checklist rows: ok / missing / check manually / unexpected (excluded item
+       present).
+  FR8  Seal requires: signed-in staff, explicit confirmation, prep/allergy
+       acknowledgement when present, and a reason for every non-ok row.
+       Enforced server-side.
+  FR9  Seal issues an HMAC-signed, expiring, single-use pickup token (QR) bound
+       to order + assigned Dasher.
+  FR10 Pickup rejects: bad signature, expired, wrong Dasher, replay, stale token.
+  FR11 All significant events are appended to a hash-chained log; the UI shows
+       chain validity. No PII in the log.
+  FR12 Photo upload works when the webcam is unavailable; the app works (with
+       overrides) when the detector is not installed.
+
+6. NON-FUNCTIONAL REQUIREMENTS
+------------------------------
+  NFR1 Privacy: images never leave the device; only scrubbed text goes to the LLM.
+  NFR2 Latency: < 1 s per frame on a laptop CPU (yolov8s-worldv2, 640 px).
+  NFR3 Reliability: no single AI failure blocks an order; failures fail safe
+       (never auto-approve).
+  NFR4 Security headers (CSP, nosniff, frame-ancestors none); secrets in .env.
+  NFR5 Usability: status readable at arm's length; red/amber/green semantics.
+
+7. SUCCESS METRICS
+------------------
+  Demo:   detect a missing sauce cup live; reject wrong Dasher and replay;
+          show intact hash chain; injection note has no effect.
+  Product (pilot hypotheses, not measured here):
+    - Missing-item reports per 1,000 orders  ↓ 30%
+    - Wrong-handoff incidents                 ↓ 90%
+    - Added pack time per order               < 10 s median
+    - Override rate (proxy for model quality) tracked per item label
+
+8. OUT OF SCOPE
+---------------
+  Real DoorDash APIs / POS integration; detecting items inside closed bags;
+  verifying allergens or ingredients; production auth (SSO/MFA); multi-store.
+  See SCOPE.md.
+
+9. RISKS
+--------
+  - Detector misses small/occluded items → "check manually" + human seal.
+  - Staff over-trust green checks → copy says "helper, not proof"; prep and
+    allergies always require explicit acknowledgement.
+  - Prompt injection via notes → allow-list output, no model authority.
+  - Added friction at rush hour → only flags exceptions; one-tap seal when all ok.
+
+10. TECH
+--------
+  Backend:  Python, FastAPI, ultralytics YOLO-World (local), OpenRouter
+            (openai/gpt-4o-mini, JSON mode), HMAC-SHA256, PBKDF2, SHA-256 chain.
+  Frontend: single HTML page, vanilla JS, getUserMedia + canvas overlay.

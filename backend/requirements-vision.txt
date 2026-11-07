@@ -1,0 +1,4 @@
+# Local computer vision (large: pulls in PyTorch). The app runs without it,
+# falling back to staff-only confirmation.
+-r requirements.txt
+ultralytics>=8.1

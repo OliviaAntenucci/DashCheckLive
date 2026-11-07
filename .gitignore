@@ -1,0 +1,20 @@
+# Secrets — OpenRouter auto-disables any key committed to a repo
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Runtime data (event log) and model weights
+data/
+*.pt
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

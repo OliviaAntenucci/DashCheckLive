@@ -1,0 +1,19 @@
+# Everything needed to run DashCheckLive, installable from the repo root:
+#   pip install -r requirements.txt
+# Core-only (no local vision / PyTorch): pip install -r backend/requirements.txt
+
+# API server
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+python-dotenv>=1.0
+
+# OpenRouter calls
+requests>=2.31
+
+# Images + pickup QR
+pillow>=10.0
+qrcode[pil]>=7.4
+
+# Local computer vision (YOLO-World; pulls in PyTorch)
+ultralytics>=8.1

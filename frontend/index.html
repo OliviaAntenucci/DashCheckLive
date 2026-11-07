@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DashCheckLive</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">DashCheck<span>Live</span></div>
+    <div class="tagline">Merchant app · Packing check before handoff</div>
+    <div id="health" class="health"></div>
+  </header>
+
+  <main class="layout">
+    <!-- Restaurant staff: merchant tablet -->
+    <section class="merchant">
+      <div id="staff-login" class="card login">
+        <h2>Restaurant staff sign-in</h2>
+        <p class="muted">Demo: <code>staff-olivia</code> / <code>4242</code></p>
+        <form id="staff-login-form">
+          <input name="user_id" placeholder="Staff ID" autocomplete="username" required>
+          <input name="pin" type="password" placeholder="PIN" autocomplete="current-password" required>
+          <button type="submit">Sign in</button>
+        </form>
+        <p id="staff-login-error" class="error"></p>
+      </div>
+
+      <div id="staff-app" class="hidden">
+        <div class="staff-bar">
+          <span>Signed in as <strong id="staff-name"></strong> (merchant_staff)</span>
+          <span>
+            <button id="demo-reset" class="ghost">Reset demo orders</button>
+            <button id="staff-logout" class="ghost">Sign out</button>
+          </span>
+        </div>
+
+        <div class="grid">
+          <aside class="card queue">
+            <h3>Orders</h3>
+            <ul id="queue"></ul>
+          </aside>
+
+          <div class="card work">
+            <div id="order-empty" class="muted">Select an order.</div>
+            <div id="order-view" class="hidden">
+              <div class="order-head">
+                <h2 id="order-title"></h2>
+                <span id="order-status" class="pill"></span>
+              </div>
+              <div id="allergy" class="allergy hidden"></div>
+              <ul id="order-items" class="items"></ul>
+
+              <div id="prepare-box">
+                <p class="muted">Customer note is hidden until it has been scrubbed of personal data.</p>
+                <button id="prepare">Build packing checklist</button>
+              </div>
+
+              <div id="checked-box" class="hidden">
+                <div class="note">
+                  <div class="label">Customer note (scrubbed)</div>
+                  <div id="note-text"></div>
+                  <div id="redactions" class="muted small"></div>
+                  <div id="parser-used" class="muted small"></div>
+                </div>
+                <div id="prep" class="prep hidden"></div>
+
+                <div class="camera">
+                  <div class="stage" id="stage">
+                    <video id="video" autoplay playsinline muted></video>
+                    <img id="photo" class="hidden" alt="Uploaded check photo">
+                    <canvas id="overlay"></canvas>
+                    <div id="stage-empty" class="stage-empty">Lay items flat in the check zone, then start the camera.</div>
+                  </div>
+                  <div class="camera-controls">
+                    <button id="cam-toggle">Start camera</button>
+                    <label class="upload ghost">Upload photo<input id="upload" type="file" accept="image/jpeg,image/png,image/webp"></label>
+                    <span id="cam-msg" class="muted small"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card side">
+            <h3>Packing checklist</h3>
+            <div id="checklist" class="muted">Build the checklist first.</div>
+
+            <div id="seal-box" class="seal hidden">
+              <label class="check"><input type="checkbox" id="prep-ack"> I followed the prep instructions / allergy flags</label>
+              <label class="check"><input type="checkbox" id="confirm"> I checked this order and it is complete</label>
+              <button id="seal" disabled>Seal &amp; release to Dasher</button>
+              <p id="seal-error" class="error"></p>
+            </div>
+
+            <div id="qr-box" class="qr hidden">
+              <div class="label">Pickup QR · <span id="qr-dasher"></span></div>
+              <img id="qr" alt="One-time pickup QR code">
+              <p class="muted small">Signed, one-time, expires in <span id="qr-ttl"></span>. Valid only for the assigned Dasher.</p>
+              <button id="send-to-phone" class="ghost">Show to Dasher phone →</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card log">
+          <div class="log-head">
+            <h3>Audit log</h3>
+            <span id="chain" class="pill"></span>
+          </div>
+          <ol id="log"></ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- Dasher phone simulator -->
+    <section class="phone">
+      <div class="phone-frame">
+        <div class="phone-title">Dasher app (simulated)</div>
+        <div id="dasher-login">
+          <form id="dasher-login-form">
+            <select name="user_id">
+              <option value="dasher-ava">dasher-ava (PIN 1111)</option>
+              <option value="dasher-ben">dasher-ben (PIN 2222)</option>
+              <option value="dasher-cy">dasher-cy (PIN 3333)</option>
+            </select>
+            <input name="pin" type="password" placeholder="PIN" required>
+            <button type="submit">Sign in</button>
+          </form>
+          <p id="dasher-login-error" class="error"></p>
+        </div>
+        <div id="dasher-app" class="hidden">
+          <p>Signed in as <strong id="dasher-name"></strong></p>
+          <label class="small muted" for="scan-token">Scanned QR payload</label>
+          <textarea id="scan-token" rows="4" placeholder="Scan the QR at the counter"></textarea>
+          <button id="scan">Confirm pickup</button>
+          <div id="scan-result" class="scan-result"></div>
+          <button id="dasher-logout" class="ghost">Switch Dasher</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
