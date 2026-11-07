@@ -1,7 +1,7 @@
 {
   "_notice": "SAMPLE DATA FOR DEMO ONLY. Fictional orders laid out like a DoorDash merchant receipt so the prototype has realistic input. Not real DoorDash data, not issued by DoorDash. All people, phone numbers (555), emails (example.com), addresses and card numbers (test card) are made up.",
   "store": {
-    "name": "Forbes Street Deli",
+    "name": "Scotty's Market",
     "store_id": "demo-store-001",
     "address": "100 Demo Way, Pittsburgh, PA 15213"
   },

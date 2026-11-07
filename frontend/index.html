@@ -61,47 +61,47 @@
       </aside>
 
       <!-- ===== Main column ===== -->
-      <main class="main">
-        <div class="topbar">
-          <div class="store-chip"><span class="dot"></span><span id="store-name"></span></div>
+      <!-- Camera is the whole middle; everything else floats on it as glass. -->
+      <main class="main cam-main">
+        <div id="stage" class="stage">
+          <video id="video" autoplay playsinline muted></video>
+          <img id="photo" class="hidden" alt="Uploaded check photo">
+          <div id="stage-msg" class="stage-msg">Starting camera…</div>
+        </div>
+
+        <div class="cam-top">
+          <div class="glass-pill store-chip"><span class="dot"></span><span id="store-name"></span></div>
           <!-- Model status still loads (sets the camera frame rate) but isn't shown. -->
           <div id="health" class="health hidden"></div>
           <div class="top-actions">
-            <span id="who" class="who"></span>
-            <button id="open-log" class="pill-btn">Audit log</button>
-            <button id="demo-reset" class="pill-btn">Reset demo</button>
-            <button id="logout" class="pill-btn">Sign out</button>
+            <span id="who" class="glass-pill who"></span>
+            <button id="open-log" class="glass-pill glass-btn">Audit log</button>
+            <button id="demo-reset" class="glass-pill glass-btn">Reset demo</button>
+            <button id="logout" class="glass-pill glass-btn">Sign out</button>
           </div>
         </div>
 
-        <!-- Live camera -->
-        <section class="sec">
-          <div class="sec-head">
-            <div><h3>Live Check</h3><p id="check-sub" class="sec-sub">Pick an order to start</p></div>
-            <div class="cam-tools">
-              <select id="camera-select" title="Camera"></select>
-              <button id="cam-toggle" class="pill-btn">Pause</button>
-              <label class="pill-btn">Upload<input id="upload" type="file" accept="image/jpeg,image/png,image/webp"></label>
-            </div>
+        <div class="cam-sub">
+          <div class="glass-pill title-pill"><span class="live-dot"></span><strong>Live Check</strong><span id="check-sub">Pick an order to start</span></div>
+          <div class="cam-tools">
+            <select id="camera-select" class="glass-pill" title="Camera"></select>
+            <button id="cam-toggle" class="glass-pill glass-btn">Pause</button>
+            <label class="glass-pill glass-btn">Upload<input id="upload" type="file" accept="image/jpeg,image/png,image/webp"></label>
           </div>
-          <div id="stage" class="stage">
-            <video id="video" autoplay playsinline muted></video>
-            <img id="photo" class="hidden" alt="Uploaded check photo">
-            <div id="toasts" class="toasts" aria-live="polite"></div>
-            <div id="banner" class="banner hidden"></div>
-            <div id="stage-msg" class="stage-msg">Starting camera…</div>
-            <span id="cam-msg" class="cam-msg"></span>
-          </div>
-        </section>
+        </div>
 
-        <!-- Packing checklist: dish cards like "Popular Dishes" -->
-        <section class="sec">
-          <div class="sec-head">
-            <div><h3>Packing Checklist</h3><p id="checklist-sub" class="sec-sub">Items appear here once an order is open</p></div>
-            <button id="recount" class="view-more hidden" title="Start counting this order from zero">Reset counts <span>↻</span></button>
+        <div id="toasts" class="toasts" aria-live="polite"></div>
+        <div id="banner" class="banner hidden"></div>
+        <span id="cam-msg" class="cam-msg"></span>
+
+        <!-- Floating glass checklist along the bottom -->
+        <div class="dock">
+          <div class="dock-head">
+            <div class="glass-pill title-pill"><strong>Packing Checklist</strong><span id="checklist-sub">Items appear here once an order is open</span></div>
+            <button id="recount" class="glass-pill glass-btn hidden" title="Start counting this order from zero">Reset counts ↻</button>
           </div>
           <div id="checklist" class="checklist"></div>
-        </section>
+        </div>
       </main>
 
       <!-- ===== Right panel: address + cart ===== -->

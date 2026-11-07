@@ -172,6 +172,59 @@ input::placeholder, textarea::placeholder { color: #85858b; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(-14px) scale(.85); } to { opacity: 1; transform: none; } }
 @keyframes toast-out { to { opacity: 0; transform: translateY(-10px) scale(.95); } }
 
+/* ---- Camera fills the middle; controls + checklist float on it as glass ---- */
+.cam-main { position: relative; padding: 0; overflow: hidden; display: block; background: #0b0b0c; }
+.cam-main .stage { position: absolute; inset: 0; height: auto; min-height: 0; border-radius: 0; box-shadow: none; }
+.glass-pill {
+  background: rgba(20, 20, 22, .38); color: #fff; border: 1px solid rgba(255, 255, 255, .22);
+  backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 12.5px; box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+}
+.glass-btn { cursor: pointer; font-weight: 600; }
+.glass-btn:hover { background: var(--accent); border-color: var(--accent); }
+label.glass-btn input[type=file] { display: none; }
+select.glass-pill { width: auto; max-width: 200px; }
+select.glass-pill option { background: var(--frame); color: #fff; }
+
+.cam-top { position: absolute; top: 16px; left: 16px; right: 16px; z-index: 5; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.cam-top .store-chip { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.cam-top .top-actions { margin-left: auto; display: flex; gap: 8px; }
+.cam-top .who { color: #e6e6e9; }
+.cam-sub { position: absolute; top: 64px; left: 16px; right: 16px; z-index: 5; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.cam-sub .cam-tools { margin-left: auto; }
+.title-pill { display: inline-flex; align-items: center; gap: 10px; }
+.title-pill strong { font-size: 14px; }
+.title-pill span:last-child { color: #ffb4a4; font-size: 12px; }
+.live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 rgba(255, 48, 8, .7); animation: live 1.6s infinite; }
+@keyframes live { 0% { box-shadow: 0 0 0 0 rgba(255, 48, 8, .7); } 70% { box-shadow: 0 0 0 10px rgba(255, 48, 8, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 48, 8, 0); } }
+
+.cam-main .toasts { top: 116px; }
+.cam-main .cam-msg { top: 116px; bottom: auto; left: 16px; }
+.cam-main .banner { bottom: auto; top: 50%; }
+
+.dock { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; padding: 0 16px 16px;
+  background: linear-gradient(to top, rgba(0, 0, 0, .55), rgba(0, 0, 0, 0)); }
+.dock-head { display: flex; gap: 10px; align-items: center; }
+.dock .food-grid { padding-top: 56px; }
+.dock .empty-note { margin-top: 12px; background: rgba(20, 20, 22, .4); color: #eee;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, .2); }
+
+/* glass food cards */
+.dock .food-card {
+  background: rgba(255, 255, 255, .12); border: 1px solid rgba(255, 255, 255, .28);
+  backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .25);
+  width: 150px; padding-top: 58px;
+}
+.dock .food-card.ok { border-color: rgba(47, 191, 113, .85); background: rgba(47, 191, 113, .16); }
+.dock .food-card.missing, .dock .food-card.check { border-color: rgba(255, 255, 255, .28); }
+.dock .food-card.unexpected { border-color: var(--bad); background: rgba(255, 75, 58, .2); }
+.dock .food-card .src, .dock .food-card .why { color: #e4e4e8; }
+.dock .food-card.missing .count-big { color: #ff8a7a; }
+.dock .food-card input { background: rgba(0, 0, 0, .35); border-color: rgba(255, 255, 255, .25); }
+.dock .food-icon { width: 92px; height: 92px; }
+.dock .float-wrap { top: -46px; }
+
 /* ---- Packing checklist ("Popular Dishes") ---- */
 .empty-note { margin: 0; padding: 18px; border-radius: 18px; background: var(--panel); }
 .food-grid { list-style: none; margin: 0; padding: 50px 4px 8px; display: flex; gap: 18px; overflow-x: auto; }
@@ -391,6 +444,7 @@ input::placeholder, textarea::placeholder { color: #85858b; }
   .station { position: static; padding: 10px; }
   .app-frame { height: auto; grid-template-columns: 1fr; border-radius: 24px; }
   .order-list { max-height: 40vh; }
+  .cam-main { min-height: 80vh; }
   .top-actions { flex-wrap: wrap; }
   .cart-panel { margin: 0 14px 14px; }
   .done-grid { grid-template-columns: 1fr; }
