@@ -405,6 +405,8 @@ $("#seal").addEventListener("click", async () => {
     state.lastToken = r.pickup_token;
     clearOverlay();
     renderSide();
+    stopCamera();
+    await showSealPop(r.order);
     openQrModal(r);
     refreshQueue();
     refreshLog();
@@ -412,6 +414,18 @@ $("#seal").addEventListener("click", async () => {
     $("#seal-error").textContent = e.message;
   }
 });
+
+// Full-screen "Order #50 sealed ✓" moment before the completion page.
+function showSealPop(o) {
+  $("#seal-pop-title").textContent = `Order #${o.id} sealed`;
+  $("#seal-pop-sub").textContent = `${o.display_name} · releasing to ${o.dasher_name}`;
+  const pop = $("#seal-pop");
+  pop.classList.remove("hidden", "leaving");
+  return new Promise((resolve) => setTimeout(() => {
+    pop.classList.add("leaving");
+    setTimeout(() => { pop.classList.add("hidden"); resolve(); }, 300);
+  }, 1700));
+}
 
 $("#recount").addEventListener("click", async () => {
   const o = state.current;
@@ -432,8 +446,6 @@ $("#recount").addEventListener("click", async () => {
 
 async function openQrModal(r) {
   const o = r.order;
-  $("#done-id").textContent = `#${o.id}`;
-  $("#qr-sub").textContent = `${o.display_name} · ${o.store} · Dasher ${o.dasher_name}`;
   $("#done-address").textContent = o.delivery_address || o.delivery_city;
   $("#qr").src = r.qr_png;
   $("#qr-ttl").textContent = `${Math.round(r.expires_in / 60)} min`;
@@ -441,7 +453,6 @@ async function openQrModal(r) {
   $("#sim-pin").value = "";
   $("#sim-result").textContent = "";
   $("#sim-result").className = "sim-result";
-  $("#done-store").textContent = o.store;
   renderNextSteps(o);
   renderCompletedReceipt(o);
   // Separate page: camera off, own history entry so the browser Back button returns.

@@ -169,19 +169,7 @@
 
   <!-- ============ Order complete page ============ -->
   <section id="view-done" class="view done-view hidden">
-    <header class="station-bar">
-      <button id="qr-close-x" class="btn ghost small">← Back to station</button>
-      <div class="brand">DashCheck<span>Live</span></div>
-      <div id="done-store" class="store"></div>
-    </header>
       <div class="done-card">
-        <div class="done-head">
-          <div>
-            <h2>Order <span id="done-id"></span> sealed <span class="ok-dot">✓</span></h2>
-            <p id="qr-sub" class="muted"></p>
-          </div>
-        </div>
-
         <div class="done-grid">
           <!-- 1. Where it goes + what to do -->
           <section class="done-col">
@@ -223,10 +211,20 @@
             <div class="label">Up next</div>
             <ul id="next-orders" class="next-orders"></ul>
             <button id="qr-close" class="btn primary wide">Start next order →</button>
+            <button id="qr-close-x" class="btn ghost wide">← Back to station</button>
           </section>
         </div>
       </div>
   </section>
+
+  <!-- "Order #50 sealed" pop-up shown between sealing and the completion page -->
+  <div id="seal-pop" class="seal-pop hidden" role="status" aria-live="assertive">
+    <div class="seal-pop-card">
+      <div class="seal-check"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-16"/></svg></div>
+      <h2 id="seal-pop-title">Order sealed</h2>
+      <p id="seal-pop-sub" class="muted"></p>
+    </div>
+  </div>
 
   <!-- ============ Dasher pickup ============ -->
   <section id="view-dasher" class="view dasher-view hidden">
