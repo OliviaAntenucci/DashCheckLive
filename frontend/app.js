@@ -814,14 +814,14 @@ function drawFlashes() {
     const [x1, y1, x2, y2] = f.b.box.map((v, i) => (i % 2 ? oy : ox) + v * k);
     const left = f.until - now;
     ctx.globalAlpha = Math.min(1, left / 400); // fade out over the last 0.4 s
-    ctx.strokeStyle = "#ff3008";
+    ctx.strokeStyle = "#b4473a";
     ctx.beginPath();
     ctx.roundRect(x1, y1, x2 - x1, y2 - y1, 14);
     ctx.stroke();
     const text = f.b.label;
     const tw = ctx.measureText(text).width + 18;
     const ty = Math.max(0, y1 - 28);
-    ctx.fillStyle = "#ff3008";
+    ctx.fillStyle = "#b4473a";
     ctx.beginPath();
     ctx.roundRect(x1, ty, tw, 24, 12);
     ctx.fill();
