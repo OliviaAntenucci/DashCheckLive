@@ -111,7 +111,8 @@ def list_orders(_: dict = Depends(staff_only)):
         "store": store.store["name"],
         "orders": [
             {"id": o.id, "ref": o.ref, "display_name": o.display_name, "status": o.status,
-             "item_count": o.item_count, "placed_at": o.placed_at, "dasher_name": o.dasher["name"]}
+             "item_count": o.item_count, "placed_at": o.placed_at, "dasher_name": o.dasher["name"],
+             "restaurant": store.store["name"], "delivery_city": o.delivery_city}
             for o in store.orders.values()
         ],
     }

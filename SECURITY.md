@@ -40,7 +40,7 @@ DashCheckLive is a feature DoorDash provides inside its merchant app. **Restaura
   - `provider: {data_collection: "deny"}` on every call, so OpenRouter only routes to providers that don't retain or train on prompts
   - one call in flight and at least 1.5 s between calls (limits cost and data volume)
   - frames are never stored locally; only their SHA-256 goes in the audit log, with `model` and `sent_off_device: true`
-  - the station header shows **“Frames sent to OpenRouter”** so staff know
+  - which model checked each frame is shown under the camera, logged per check, and reported by `/api/health` (`images_leave_device`). The header status pills were removed for a cleaner demo screen
   - `VISION_BACKEND=local` keeps every image on the device (local YOLO)
 
   Residual risk: whatever the camera sees (staff hands or faces, other orders, a receipt left in frame) reaches the model provider. Point the camera down at the check zone only.

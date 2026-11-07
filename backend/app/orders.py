@@ -87,6 +87,14 @@ class Order:
         return f"{first} {rest[-1][0]}." if rest else first
 
     @property
+    def delivery_city(self) -> str:
+        """City + state only ("Pittsburgh, PA"): enough for staff, not the street address."""
+        parts = [p.strip() for p in self.customer.get("address", "").split(",")]
+        if len(parts) >= 3:
+            return f"{parts[-2]}, {parts[-1].split()[0]}"
+        return parts[-2] if len(parts) == 2 else ""
+
+    @property
     def item_count(self) -> int:
         return sum(it["qty"] for it in self.items)
 
@@ -148,6 +156,7 @@ class Order:
             "placed_at": self.placed_at,
             "fulfillment": self.fulfillment,
             "store": store["name"],
+            "delivery_city": self.delivery_city,
             "display_name": self.display_name,
             "dasher_id": self.dasher_id,
             "dasher_name": self.dasher["name"],

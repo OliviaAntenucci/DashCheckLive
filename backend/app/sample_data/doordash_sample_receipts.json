@@ -1,14 +1,14 @@
 {
   "_notice": "SAMPLE DATA FOR DEMO ONLY. Fictional orders laid out like a DoorDash merchant receipt so the prototype has realistic input. Not real DoorDash data, not issued by DoorDash. All people, phone numbers (555), emails (example.com), addresses and card numbers (test card) are made up.",
   "store": {
-    "name": "Forbes Street Deli (Demo)",
+    "name": "Forbes Street Deli",
     "store_id": "demo-store-001",
     "address": "100 Demo Way, Pittsburgh, PA 15213"
   },
   "orders": [
     {
       "id": "50",
-      "ref": "DEMO-M0N5T",
+      "ref": "M0N5T",
       "placed_at": "2026-11-07T12:00:00",
       "fulfillment": "Delivery",
       "customer": {"name": "Riley Park", "phone": "(412) 555-0150", "address": "450 Morewood Ave, Pittsburgh, PA 15213"},
@@ -26,7 +26,7 @@
     },
     {
       "id": "42",
-      "ref": "DEMO-7F3K2",
+      "ref": "7F3K2",
       "placed_at": "2026-11-07T12:04:00",
       "fulfillment": "Delivery",
       "customer": {"name": "Maria Gonzalez", "phone": "(412) 555-0199", "address": "5000 Forbes Ave Apt 3B, Pittsburgh, PA 15213"},
@@ -39,7 +39,7 @@
     },
     {
       "id": "43",
-      "ref": "DEMO-2Q9LD",
+      "ref": "2Q9LD",
       "placed_at": "2026-11-07T12:06:00",
       "fulfillment": "Delivery",
       "customer": {"name": "Sam Patel", "phone": "(412) 555-0123", "address": "220 Craig St, Pittsburgh, PA 15213"},
@@ -52,7 +52,7 @@
     },
     {
       "id": "44",
-      "ref": "DEMO-K8M1X",
+      "ref": "K8M1X",
       "placed_at": "2026-11-07T12:07:00",
       "fulfillment": "Delivery",
       "customer": {"name": "Lee Chen", "phone": "412.555.0142", "address": "4400 Fifth Avenue, Pittsburgh, PA 15213"},
@@ -66,7 +66,7 @@
     },
     {
       "id": "45",
-      "ref": "DEMO-5RT7A",
+      "ref": "5RT7A",
       "placed_at": "2026-11-07T12:09:00",
       "fulfillment": "Delivery",
       "customer": {"name": "Jordan Kim", "phone": "(412) 555-0110", "address": "312 S Craig St, Pittsburgh, PA 15213"},
@@ -78,7 +78,7 @@
     },
     {
       "id": "46",
-      "ref": "DEMO-H3P0V",
+      "ref": "H3P0V",
       "placed_at": "2026-11-07T12:11:00",
       "fulfillment": "Delivery",
       "customer": {"name": "Priya Shah", "phone": "(412) 555-0187", "address": "1 Schenley Dr, Pittsburgh, PA 15213"},
@@ -91,7 +91,7 @@
     },
     {
       "id": "47",
-      "ref": "DEMO-W6C4N",
+      "ref": "W6C4N",
       "placed_at": "2026-11-07T12:13:00",
       "fulfillment": "Delivery",
       "customer": {"name": "Alex Morgan", "phone": "(412) 555-0164", "address": "5032 Forbes Ave, Pittsburgh, PA 15213"},
@@ -104,7 +104,7 @@
     },
     {
       "id": "48",
-      "ref": "DEMO-B1Z8Q",
+      "ref": "B1Z8Q",
       "placed_at": "2026-11-07T12:15:00",
       "fulfillment": "Pickup by Dasher",
       "customer": {"name": "Taylor Wright", "phone": "(412) 555-0135", "address": "4800 Baum Blvd, Pittsburgh, PA 15213"},
@@ -116,7 +116,7 @@
     },
     {
       "id": "49",
-      "ref": "DEMO-N4V2J",
+      "ref": "N4V2J",
       "placed_at": "2026-11-07T12:18:00",
       "fulfillment": "Delivery",
       "customer": {"name": "Chris Diaz", "phone": "(412) 555-0177", "address": "600 Grant St, Pittsburgh, PA 15219"},

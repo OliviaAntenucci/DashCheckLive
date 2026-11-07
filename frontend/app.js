@@ -141,7 +141,8 @@ async function refreshQueue() {
     const li = el("li", {},
       el("div", {},
         el("div", {}, el("strong", { textContent: `#${o.id}` }), ` ${o.display_name}`),
-        el("div", { className: "meta", textContent: `${o.item_count} items · ${o.ref} · ${o.dasher_name}` })),
+        el("div", { className: "meta", textContent: `${o.restaurant} → ${o.delivery_city}` }),
+        el("div", { className: "meta", textContent: `${o.item_count} item${o.item_count === 1 ? "" : "s"} · ${o.ref} · ${o.dasher_name}` })),
       el("span", { className: `pill st ${statusCls}`, textContent: o.status.replace("_", " ") }));
     if (state.current && state.current.id === o.id) li.classList.add("active");
     li.addEventListener("click", () => openOrder(o.id));
@@ -218,6 +219,7 @@ function renderReceipt() {
     el("div", { className: "r-note", textContent: o.status === "new" ? "(hidden until personal info is removed)" : (o.note || "(none)") }),
     red ? el("div", { className: "r-muted", textContent: `Removed: ${red}` }) : null,
     el("hr"),
+    el("div", { className: "r-line" }, el("span", { textContent: "Deliver to" }), el("span", { textContent: o.delivery_city })),
     el("div", { className: "r-line" }, el("span", { textContent: "Dasher" }), el("span", { textContent: o.dasher_name })),
     el("div", { className: "r-muted", textContent: "Customer contact hidden from merchant" }),
   );
@@ -276,6 +278,24 @@ const whyText = {
   unexpected: () => "Customer asked to leave this out",
 };
 
+// Cute icon per checklist label (emoji: no image files, CSP-friendly).
+const FOOD_ICONS = {
+  "bottle": "🥤", "can": "🥫", "energy drink": "⚡", "sandwich": "🥪", "hot dog": "🌭",
+  "pizza": "🍕", "donut": "🍩", "apple": "🍎", "banana": "🍌", "orange": "🍊",
+  "sauce cup": "🥣", "fork": "🍴", "spoon": "🥄", "knife": "🔪", "tofu": "🧈", "salad": "🥗",
+};
+const prevStatus = {}; // "orderId:label" -> last status, to pop only on the change to ok
+
+function foodIcon(item, orderId) {
+  const key = `${orderId}:${item.label}`;
+  const justOk = item.status === "ok" && prevStatus[key] && prevStatus[key] !== "ok";
+  prevStatus[key] = item.status;
+  const span = el("span", { className: `food-icon ${item.status}${justOk ? " just-ok" : ""}`, ariaHidden: "true" });
+  // Kawaii illustration if we drew one (icons.js), emoji otherwise.
+  span.append(KAWAII(item.label) || (FOOD_ICONS[item.label] || "🍽️"));
+  return span;
+}
+
 function overridesFor(id) {
   return (state.overrides[id] = state.overrides[id] || {});
 }
@@ -295,7 +315,7 @@ function renderChecklist(items, force = false) {
     const count = i.expected === 0 ? (i.detected ? "in view" : "left out ✓") : `${i.detected}/${i.expected}${i.status === "ok" ? " ✓" : ""}`;
     const row = el("li", { className: `row ${i.status}` },
       el("div", { className: "top" },
-        el("span", {}, el("span", { className: "name", textContent: i.label }),
+        el("span", { className: "name-wrap" }, foodIcon(i, o.id), el("span", { className: "name", textContent: i.label }),
           el("span", { className: "src", textContent: i.source === "menu" ? "" : `from ${i.source}` })),
         el("span", { className: "count-big", textContent: count })),
       whyText[i.status] ? el("div", { className: "why", textContent: whyText[i.status](i) })
@@ -314,17 +334,12 @@ function renderChecklist(items, force = false) {
 function setBanner(items) {
   const b = $("#banner");
   if (!items || !items.length || !state.lastResult) { b.classList.add("hidden"); return; }
-  const bad = items.filter((i) => i.status === "missing" || i.status === "unexpected");
-  const check = items.filter((i) => i.status === "check");
-  if (!bad.length && !check.length) {
+  // Only the success banner shows over the camera; what's missing is in the checklist panel.
+  if (items.every((i) => i.status === "ok")) {
     b.textContent = "✓ All items present. Confirm & seal";
     b.className = "banner ok";
-  } else if (bad.length) {
-    b.textContent = bad.map((i) => i.status === "unexpected" ? `Remove ${i.label}` : `Missing ${i.label} ×${i.expected - i.detected}`).join(" · ");
-    b.className = "banner bad";
   } else {
-    b.textContent = `Check: ${check.map((i) => i.label).join(", ")}`;
-    b.className = "banner warn";
+    b.classList.add("hidden");
   }
 }
 

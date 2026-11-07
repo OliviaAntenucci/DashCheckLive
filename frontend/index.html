@@ -11,8 +11,16 @@
   <!-- ============ Sign-in page ============ -->
   <section id="view-login" class="view login-view">
     <div class="login-card">
+      <p class="welcome">Welcome to</p>
       <div class="brand big">DashCheck<span>Live</span></div>
-      <p class="login-sub">Packing check for restaurant staff · DoorDash merchant tools</p>
+      <p class="login-sub">Make sure every order is complete before it leaves your restaurant. The camera checks the items against the order, so fewer meals go out missing something.</p>
+      <ol class="steps">
+        <li><strong>Sign in</strong> with your staff ID and PIN.</li>
+        <li><strong>Pick an order</strong> and lay its items in front of the camera. Each item is checked off as it's counted.</li>
+        <li><strong>Finalize the order</strong>: tick “I'm done” and seal it.</li>
+        <li><strong>Hand it off.</strong> The Dasher scans the pickup code and takes the order.</li>
+      </ol>
+      <p class="login-sub small">Dashers: sign in with your Dasher ID to confirm a pickup.</p>
       <form id="login-form" autocomplete="off">
         <label>User ID<input name="user_id" autocomplete="username" placeholder="staff-olivia" required></label>
         <label>PIN<input name="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="••••" required></label>
@@ -40,7 +48,8 @@
     <header class="station-bar">
       <div class="brand">DashCheck<span>Live</span></div>
       <div id="store-name" class="store"></div>
-      <div id="health" class="health"></div>
+      <!-- Model status still loads (sets the camera frame rate) but isn't shown. -->
+      <div id="health" class="health hidden"></div>
       <div class="bar-actions">
         <span id="who" class="who"></span>
         <button id="open-log" class="btn ghost small">Audit log</button>
@@ -145,6 +154,7 @@
     </div>
   </section>
 
+  <script src="icons.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
