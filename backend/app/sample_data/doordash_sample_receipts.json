@@ -32,10 +32,15 @@
       "customer": {"name": "Maria Gonzalez", "phone": "(412) 555-0199", "address": "5000 Forbes Ave Apt 3B, Pittsburgh, PA 15213"},
       "dasher": {"id": "dasher-ava", "name": "Ava R."},
       "items": [
-        {"menu": "turkey_club", "qty": 1, "modifiers": [{"text": "No onions"}]},
-        {"menu": "bottled_soda", "qty": 2, "modifiers": []}
+        {"menu": "monster_energy", "qty": 1, "modifiers": []},
+        {"menu": "bottled_water", "qty": 1, "modifiers": []},
+        {"menu": "tofu_block", "qty": 1, "modifiers": []},
+        {"menu": "garden_salad", "qty": 1, "modifiers": []},
+        {"menu": "knife", "qty": 1, "modifiers": []},
+        {"menu": "fork", "qty": 1, "modifiers": []},
+        {"menu": "spoon", "qty": 1, "modifiers": []}
       ],
-      "customer_note": "extra ranch pls + a fork. PEANUT ALLERGY!! text Maria at 412-555-0199 when here, im at 5000 Forbes Ave apt 3B"
+      "customer_note": "PEANUT ALLERGY!! text Maria at 412-555-0199 when here, im at 5000 Forbes Ave apt 3B"
     },
     {
       "id": "43",

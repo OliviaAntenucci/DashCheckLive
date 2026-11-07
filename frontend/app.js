@@ -23,7 +23,9 @@ const state = {
 
 function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
-  Object.assign(node, props);
+  const { dataset, ...rest } = props;
+  Object.assign(node, rest);
+  if (dataset) Object.assign(node.dataset, dataset); // node.dataset itself is read-only
   for (const c of children) if (c != null) node.append(c);
   return node;
 }
@@ -328,12 +330,13 @@ function renderReceipt() {
 
   // The cart is where item status shows now: ✓ when counted, "detected/expected" when not.
   const byLabel = Object.fromEntries((o.checklist || []).map((i) => [i.label, i]));
+  const rowOk = (row) => (o.status !== "new" && row && row.status === "ok" ? "1" : "0");
   const chip = (row) => {
     const s = o.status === "new" || !row ? "wait" : row.status === "ok" ? "ok" : "no";
     const text = s === "ok" ? "✓" : s === "wait" ? "…" : row.expected === 0 ? "remove" : `${row.detected}/${row.expected}`;
     return el("span", { className: `cart-chip ${s}`, textContent: text });
   };
-  const lines = r.lines.map((l) => el("div", { className: "cart-line" },
+  const lines = r.lines.map((l) => el("div", { className: "cart-line", dataset: { ok: rowOk(byLabel[l.detect]), key: l.detect } },
     el("span", { className: "cart-img" }, KAWAII(l.detect) || "🍽️"),
     el("div", { className: "cart-info" },
       el("strong", { textContent: l.name }),
@@ -345,7 +348,7 @@ function renderReceipt() {
   const onReceipt = new Set(r.lines.map((l) => l.detect));
   for (const row of o.checklist || []) {
     if (onReceipt.has(row.label)) continue;
-    lines.push(el("div", { className: "cart-line" },
+    lines.push(el("div", { className: "cart-line", dataset: { ok: rowOk(row), key: row.label } },
       el("span", { className: "cart-img" }, KAWAII(row.label) || "🍽️"),
       el("div", { className: "cart-info" },
         el("strong", { textContent: row.label.charAt(0).toUpperCase() + row.label.slice(1) }),
@@ -353,7 +356,21 @@ function renderReceipt() {
         el("div", { className: "qty", textContent: row.expected === 0 ? "" : `Qty ${row.expected}` })),
       chip(row)));
   }
-  $("#receipt").replaceChildren(...lines);
+  // Still-missing items first; detected (✓) items sink below them. Stable sort keeps receipt order within each group.
+  lines.sort((a, b) => Number(a.dataset.ok) - Number(b.dataset.ok));
+  // Animate the move (FLIP): remember where each line was, re-render, then slide from old to new spot.
+  const box = $("#receipt");
+  const before = new Map([...box.children].map((n) => [n.dataset.key, { top: n.getBoundingClientRect().top, ok: n.dataset.ok }]));
+  box.replaceChildren(...lines);
+  for (const n of box.children) {
+    const prev = before.get(n.dataset.key);
+    if (!prev) continue;
+    if (prev.ok === "0" && n.dataset.ok === "1") n.classList.add("just-detected");
+    const dy = prev.top - n.getBoundingClientRect().top;
+    if (dy && n.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      n.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 550, easing: "cubic-bezier(.2,.8,.2,1)" });
+    }
+  }
 
   const red = Object.entries(o.redactions || {}).map(([k, n]) => `${n}× ${k}`).join(", ");
   $("#note-text").textContent = o.status === "new" ? "Removing personal info…" : (o.note || "No note");
@@ -907,6 +924,7 @@ function clearOverlay() {
   flashes.length = 0;
   const c = $("#overlay");
   c.getContext("2d").clearRect(0, 0, c.width, c.height);
+  clearToasts();
   $("#banner").classList.add("hidden");
   $("#cam-msg").textContent = "";
 }
@@ -985,16 +1003,31 @@ function drawFlashes() {
   flashRaf = requestAnimationFrame(drawFlashes);
 }
 
+// "Bottle detected!" stays on screen: pops in big, then shrinks into a compact tag in a
+// stack. One tag per item (updated if its count rises). Cleared by clearOverlay().
 function showToast(item) {
   const box = $("#toasts");
   const name = item.label.charAt(0).toUpperCase() + item.label.slice(1);
   const extra = item.expected > 1 ? ` (${Math.min(item.detected, item.expected)}/${item.expected})` : "";
-  const toast = el("div", { className: "toast" },
-    el("span", { className: "t-icon" }, KAWAII(item.label) || (FOOD_ICONS[item.label] || "🍽️")),
-    el("span", { textContent: `${name} detected!${extra}` }));
-  box.append(toast);
-  while (box.children.length > 4) box.firstChild.remove();
-  setTimeout(() => toast.remove(), 2600);
+  let toast = [...box.children].find((t) => t.dataset.label === item.label);
+  if (toast) {
+    toast.querySelector(".t-text").textContent = `${name} detected!${extra}`;
+    toast.classList.remove("compact");
+    toast.style.animation = "none";
+    void toast.offsetWidth; // restart the pop animation
+    toast.style.animation = "";
+  } else {
+    toast = el("div", { className: "toast", dataset: { label: item.label } },
+      el("span", { className: "t-icon" }, KAWAII(item.label) || (FOOD_ICONS[item.label] || "🍽️")),
+      el("span", { className: "t-text", textContent: `${name} detected!${extra}` }));
+    box.append(toast);
+  }
+  clearTimeout(toast._shrink);
+  toast._shrink = setTimeout(() => toast.classList.add("compact"), 2000);
+}
+
+function clearToasts() {
+  $("#toasts").replaceChildren();
 }
 
 // ---------------- audit log ----------------
