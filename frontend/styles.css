@@ -271,7 +271,7 @@ select.glass-pill option { background: var(--surface); color: var(--ink); }
 .qty { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 3px; font-weight: 600; }
 .q-btn { width: 18px; height: 18px; border-radius: 50%; background: var(--surface); box-shadow: 2px 2px 4px var(--lo), -2px -2px 4px var(--hi);
   display: grid; place-items: center; font-size: 11px; line-height: 1; color: var(--muted); }
-.cart-chip { min-width: 36px; height: 28px; padding: 0 10px; border-radius: 999px; background: var(--surface); color: var(--muted);
+.cart-chip { font-size: 12px; white-space: nowrap; min-width: 36px; height: 28px; padding: 0 10px; border-radius: 999px; background: var(--surface); color: var(--muted);
   display: grid; place-items: center; font-weight: 800; box-shadow: var(--raise-sm); }
 .cart-chip.ok { background: var(--ok); color: #fff; }
 .cart-chip.no { background: #9a4a3e; color: #fff; }
@@ -393,6 +393,10 @@ select.glass-pill option { background: var(--surface); color: var(--ink); }
 .seal-check circle { fill: var(--ok); stroke: rgba(255, 255, 255, .5); stroke-width: 3; transform-origin: center; animation: pop .5s cubic-bezier(.3, 1.6, .5, 1); }
 .seal-check path { fill: none; stroke: #fff; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round;
   stroke-dasharray: 40; stroke-dashoffset: 40; animation: draw .45s ease-out .3s forwards; }
+.next-pop-card { width: min(520px, 92vw); text-align: left; padding: 30px 28px 26px; display: grid; gap: 12px; }
+.next-pop-card h2 { margin-top: 0; font-size: 28px; }
+.next-pop-card .label { margin: 0; }
+.next-pop-card .next-orders { max-height: 52vh; padding: 8px 6px; }
 @keyframes draw { to { stroke-dashoffset: 0; } }
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes fade-out { to { opacity: 0; } }

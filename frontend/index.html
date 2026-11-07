@@ -88,6 +88,7 @@
             <select id="camera-select" class="glass-pill" title="Camera"></select>
             <button id="cam-toggle" class="glass-pill glass-btn">Pause</button>
             <label class="glass-pill glass-btn">Upload<input id="upload" type="file" accept="image/jpeg,image/png,image/webp"></label>
+            <button id="recount" class="glass-pill glass-btn hidden" title="Start counting this order from zero">Reset counts ↻</button>
           </div>
         </div>
 
@@ -95,12 +96,10 @@
         <div id="banner" class="banner hidden"></div>
         <span id="cam-msg" class="cam-msg"></span>
 
-        <!-- Floating glass checklist along the bottom -->
-        <div class="dock">
-          <div class="dock-head">
-            <div class="glass-pill title-pill"><strong>Packing Checklist</strong><span id="checklist-sub">Items appear here once an order is open</span></div>
-            <button id="recount" class="glass-pill glass-btn hidden" title="Start counting this order from zero">Reset counts ↻</button>
-          </div>
+        <!-- Checklist cards no longer float over the camera; item status shows in the cart.
+             These stay (hidden) because the checklist logic still renders into them. -->
+        <div class="dock hidden">
+          <span id="checklist-sub"></span>
           <div id="checklist" class="checklist"></div>
         </div>
       </main>
@@ -218,7 +217,18 @@
       </div>
   </section>
 
-  <!-- "Order #50 sealed" pop-up shown between sealing and the completion page -->
+  <!-- After sealing: pick the next order -->
+  <div id="next-pop" class="seal-pop hidden" role="dialog" aria-modal="true" aria-labelledby="next-pop-title">
+    <div class="seal-pop-card next-pop-card">
+      <p class="label">Up next</p>
+      <h2 id="next-pop-title">Pick the next order</h2>
+      <p id="next-pop-sub" class="muted"></p>
+      <ul id="next-pop-list" class="next-orders"></ul>
+      <button id="next-pop-close" class="btn ghost wide">Back to station</button>
+    </div>
+  </div>
+
+  <!-- "Order #50 sealed" pop-up shown right after sealing -->
   <div id="seal-pop" class="seal-pop hidden" role="status" aria-live="assertive">
     <div class="seal-pop-card">
       <div class="seal-check"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-16"/></svg></div>

@@ -88,6 +88,7 @@ function signOut(message = "") {
   state.current = null;
   try { sessionStorage.removeItem("dcl-session"); } catch {}
   $("#log-drawer").classList.add("hidden");
+  $("#next-pop").classList.add("hidden");
   if (location.hash) history.replaceState(null, "", location.pathname);
   $("#login-error").textContent = message;
   show("#view-login");
@@ -220,19 +221,34 @@ function renderReceipt() {
     : o.fulfillment.toLowerCase().startsWith("pickup") ? "pickup" : "delivery";
   for (const s of document.querySelectorAll(".mode-toggle span")) s.classList.toggle("on", s.dataset.mode === mode);
 
+  // The cart is where item status shows now: ✓ when counted, "detected/expected" when not.
   const byLabel = Object.fromEntries((o.checklist || []).map((i) => [i.label, i]));
-  $("#receipt").replaceChildren(...r.lines.map((l) => {
-    const row = byLabel[l.detect];
-    const state_ = o.status === "new" || !row ? "wait" : row.status === "ok" ? "ok" : "no";
-    return el("div", { className: "cart-line" },
-      el("span", { className: "cart-img" }, KAWAII(l.detect) || "🍽️"),
+  const chip = (row) => {
+    const s = o.status === "new" || !row ? "wait" : row.status === "ok" ? "ok" : "no";
+    const text = s === "ok" ? "✓" : s === "wait" ? "…" : row.expected === 0 ? "remove" : `${row.detected}/${row.expected}`;
+    return el("span", { className: `cart-chip ${s}`, textContent: text });
+  };
+  const lines = r.lines.map((l) => el("div", { className: "cart-line" },
+    el("span", { className: "cart-img" }, KAWAII(l.detect) || "🍽️"),
+    el("div", { className: "cart-info" },
+      el("strong", { textContent: l.name }),
+      el("div", { className: "cart-sub", textContent: l.modifiers.join(" · ") || money(l.total) }),
+      el("div", { className: "qty" }, el("span", { className: "q-btn", textContent: "−" }), el("span", { textContent: String(l.qty) }),
+        el("span", { className: "q-btn", textContent: "+" }))),
+    chip(byLabel[l.detect])));
+  // Extras added by the note or modifiers (e.g. a ranch cup) and items to leave out.
+  const onReceipt = new Set(r.lines.map((l) => l.detect));
+  for (const row of o.checklist || []) {
+    if (onReceipt.has(row.label)) continue;
+    lines.push(el("div", { className: "cart-line" },
+      el("span", { className: "cart-img" }, KAWAII(row.label) || "🍽️"),
       el("div", { className: "cart-info" },
-        el("strong", { textContent: l.name }),
-        el("div", { className: "cart-sub", textContent: l.modifiers.join(" · ") || money(l.total) }),
-        el("div", { className: "qty" }, el("span", { className: "q-btn", textContent: "−" }), el("span", { textContent: String(l.qty) }),
-          el("span", { className: "q-btn", textContent: "+" }))),
-      el("span", { className: `cart-chip ${state_}`, textContent: state_ === "ok" ? "✓" : state_ === "no" ? "✗" : "…" }));
-  }));
+        el("strong", { textContent: row.label.charAt(0).toUpperCase() + row.label.slice(1) }),
+        el("div", { className: "cart-sub", textContent: row.expected === 0 ? "Customer asked to leave out" : `Extra from ${row.source}` }),
+        el("div", { className: "qty", textContent: row.expected === 0 ? "" : `Qty ${row.expected}` })),
+      chip(row)));
+  }
+  $("#receipt").replaceChildren(...lines);
 
   const red = Object.entries(o.redactions || {}).map(([k, n]) => `${n}× ${k}`).join(", ");
   $("#note-text").textContent = o.status === "new" ? "Removing personal info…" : (o.note || "No note");
@@ -352,7 +368,8 @@ function renderChecklist(items, force = false) {
   }
   $("#checklist").replaceChildren(ul);
   const okN = items.filter((i) => i.status === "ok").length;
-  $("#checklist-sub").textContent =`${okN} of ${items.length} items detected`;
+  $("#checklist-sub").textContent = `${okN} of ${items.length} items detected`;
+  $("#check-sub").textContent = `Order #${o.id} · ${okN} of ${items.length} items detected`;
   renderReceipt(); // refresh the ✓/✗ chips in the cart
   updateSealButton();
 }
@@ -407,15 +424,46 @@ $("#seal").addEventListener("click", async () => {
     renderSide();
     stopCamera();
     await showSealPop(r.order);
-    openQrModal(r);
-    refreshQueue();
+    await refreshQueue().catch(() => {});
+    showNextPicker(r.order);
     refreshLog();
   } catch (e) {
     $("#seal-error").textContent = e.message;
   }
 });
 
-// Full-screen "Order #50 sealed ✓" moment before the completion page.
+// After the sealed moment: a pop-up listing waiting orders to pick from.
+function showNextPicker(sealed) {
+  const waiting = state.orders.filter((o) => o.id !== sealed.id && (o.status === "new" || o.status === "prepared"));
+  $("#next-pop-sub").textContent = waiting.length
+    ? `#${sealed.id} is sealed for ${sealed.dasher_name}. ${waiting.length} order${waiting.length === 1 ? "" : "s"} waiting.`
+    : `#${sealed.id} is sealed for ${sealed.dasher_name}.`;
+  const list = $("#next-pop-list");
+  if (!waiting.length) {
+    list.replaceChildren(el("li", { className: "caught-up", textContent: "All caught up 🎉 No orders waiting." }));
+  } else {
+    list.replaceChildren(...waiting.map((o) => {
+      const li = el("li", { className: "next-card" },
+        el("div", { className: "mini-icons" },
+          ...o.labels.slice(0, 4).map((l) => el("span", { className: "mini-icon" }, KAWAII(l) || "🍽️"))),
+        el("div", { className: "next-info" },
+          el("strong", { textContent: `#${o.id} ${o.display_name}` }),
+          el("div", { className: "small muted", textContent: `${o.item_count} item${o.item_count === 1 ? "" : "s"} · ${o.delivery_city} · ${o.dasher_name}` })),
+        el("span", { className: `status-pill ${o.status}`, textContent: STATUS_TEXT[o.status] || o.status }));
+      li.addEventListener("click", () => { closeNextPicker(); openOrder(o.id); });
+      return li;
+    }));
+  }
+  $("#next-pop").classList.remove("hidden");
+}
+
+function closeNextPicker() {
+  $("#next-pop").classList.add("hidden");
+  startCamera($("#camera-select").value || undefined);
+}
+$("#next-pop-close").addEventListener("click", closeNextPicker);
+
+// Full-screen "Order #50 sealed ✓" moment before picking the next order.
 function showSealPop(o) {
   $("#seal-pop-title").textContent = `Order #${o.id} sealed`;
   $("#seal-pop-sub").textContent = `${o.display_name} · releasing to ${o.dasher_name}`;
