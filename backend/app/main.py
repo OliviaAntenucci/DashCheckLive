@@ -99,7 +99,7 @@ def health():
         "detector": detector.status(),
         "parser": f"openrouter:{config.PARSE_MODEL}" if config.OPENROUTER_KEY else "rules (no OPENROUTER_KEY)",
         "images_leave_device": False,
-        "thresholds": {"accept": config.CONF_ACCEPT, "review": config.CONF_REVIEW},
+        "thresholds": {"accept": config.CONF_ACCEPT, "confident": config.CONF_CONFIDENT},
     }
 
 
@@ -180,6 +180,10 @@ async def check_frame(
         order.smoother.reset()
     smoothed = order.smoother.push(accepted)
     items, all_ok = compare(order.expected, order.excluded, smoothed, review, order.sources)
+    # Flag rows whose count rests only on low-confidence boxes, so staff can glance at them.
+    confident = {b["label"] for b in result["boxes"] if b["conf"] >= config.CONF_CONFIDENT}
+    for item in items:
+        item["low_conf"] = item["detected"] > 0 and item["label"] not in confident
     order.last_check = {
         "frame_sha256": frame_hash, "source": "photo" if mode == "photo" else "live",
         "ts": time.time(), "items": items, "all_ok": all_ok,
@@ -195,7 +199,7 @@ async def check_frame(
             statuses={i["label"]: i["status"] for i in items},
         )
     return {**result, "items": items, "all_ok": all_ok, "frame_sha256": frame_hash,
-            "thresholds": {"accept": config.CONF_ACCEPT, "review": config.CONF_REVIEW}}
+            "thresholds": {"accept": config.CONF_ACCEPT, "confident": config.CONF_CONFIDENT}}
 
 
 class SealRequest(BaseModel):

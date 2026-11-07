@@ -21,11 +21,15 @@ LLM_TIMEOUT_SECONDS = 15
 YOLO_WORLD_WEIGHTS = os.getenv("YOLO_WORLD_WEIGHTS") or os.getenv("YOLO_WEIGHTS", "yolov8s-worldv2.pt")
 COCO_WEIGHTS = os.getenv("COCO_WEIGHTS", "yolo11s.pt")
 DETECT_IMGSZ = int(os.getenv("DETECT_IMGSZ", "640"))
-# YOLO-World scores are lower than closed-set models; 0.35 dropped most real bottles.
-CONF_ACCEPT = float(os.getenv("CONF_ACCEPT", "0.25"))
-CONF_REVIEW = float(os.getenv("CONF_REVIEW", "0.10"))
-SMOOTH_WINDOW = 5
-SMOOTH_MIN_HITS = 2  # a count must appear in at least this many of the last SMOOTH_WINDOW frames
+# Every box the detectors return (>= CONF_ACCEPT) counts toward the checklist,
+# even low-confidence ones. Boxes under CONF_CONFIDENT still count but are drawn
+# dashed and flagged "low confidence" so staff can glance at them.
+CONF_ACCEPT = float(os.getenv("CONF_ACCEPT", "0.10"))
+CONF_REVIEW = float(os.getenv("CONF_REVIEW", str(CONF_ACCEPT)))  # detector floor
+CONF_CONFIDENT = float(os.getenv("CONF_CONFIDENT", "0.25"))  # display only
+SMOOTH_WINDOW = int(os.getenv("SMOOTH_WINDOW", "3"))
+# Frames out of the last SMOOTH_WINDOW a count must appear in. 1 = any single detection counts.
+SMOOTH_MIN_HITS = int(os.getenv("SMOOTH_MIN_HITS", "1"))
 MAX_FRAME_BYTES = 5 * 1024 * 1024
 ALLOWED_FRAME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 

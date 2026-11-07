@@ -62,8 +62,8 @@ AI assists; people decide. The model never seals an order.
   FR5  Camera frames (~2 fps) or an uploaded photo are processed locally by two
        detectors (open-vocabulary YOLO-World with several prompts per item, and
        COCO-trained YOLO11), merged with non-max suppression.
-  FR6  A count must appear in 2 of the last 5 frames; boxes >= 0.25 confidence
-       count; 0.10–0.25 produce "check manually".
+  FR6  Every detected box (>= 0.10) counts; an item counts if seen in any of the
+       last 3 frames. Boxes < 0.25 are shown dashed and flagged "low confidence".
   FR13 Sign-in page routes by role: staff → full-screen camera packing station
        (queue + receipt left, checklist right); Dasher → pickup screen.
   FR14 Demo input is 8 fictional sample receipts in a DoorDash-like layout,

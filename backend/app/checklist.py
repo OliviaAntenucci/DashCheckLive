@@ -8,9 +8,9 @@ from . import config
 class Smoother:
     """Per label: the highest count seen in at least `min_hits` of the last N frames.
 
-    A plain median needed an item in 3 of 5 frames, so a bottle the detector
-    caught every other frame never registered. Requiring 2 hits still ignores
-    one-frame flickers.
+    With the default min_hits=1 this is the max over the window: once an item is
+    detected it counts, and stays counted for a few frames even if the detector
+    blinks. Raise SMOOTH_MIN_HITS to trade sensitivity for fewer false counts.
     """
 
     def __init__(self, window: int = config.SMOOTH_WINDOW, min_hits: int = config.SMOOTH_MIN_HITS) -> None:

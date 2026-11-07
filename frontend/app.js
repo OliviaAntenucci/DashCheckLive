@@ -288,7 +288,8 @@ function renderChecklist(items, force = false) {
         el("span", {}, el("span", { className: "name", textContent: i.label }),
           el("span", { className: "src", textContent: i.source === "menu" ? "" : `from ${i.source}` })),
         el("span", { className: "count-big", textContent: count })),
-      whyText[i.status] ? el("div", { className: "why", textContent: whyText[i.status](i) }) : null);
+      whyText[i.status] ? el("div", { className: "why", textContent: whyText[i.status](i) })
+        : i.low_conf ? el("div", { className: "why", textContent: "Counted (low confidence). Quick glance" }) : null);
     if (i.status !== "ok") {
       const input = el("input", { placeholder: "Optional reason, e.g. verified by hand", value: ov[i.label] || "", maxLength: 120 });
       input.addEventListener("input", () => { ov[i.label] = input.value; updateSealButton(); });
@@ -562,12 +563,13 @@ function drawBoxes() {
   const s = Math.min(cw / nw, ch / nh);
   const ox = (cw - nw * s) / 2, oy = (ch - nh * s) / 2;
   const k = (nw / r.width) * s;
-  const accept = (r.thresholds && r.thresholds.accept) || 0.25;
+  // Every box counts; low-confidence ones are drawn dashed orange so staff can glance at them.
+  const confident = (r.thresholds && r.thresholds.confident) || 0.25;
   ctx.lineWidth = 3;
   ctx.font = "bold 15px system-ui";
   for (const b of r.boxes) {
     const [x1, y1, x2, y2] = b.box.map((v, i) => (i % 2 ? oy : ox) + v * k);
-    const strong = b.conf >= accept;
+    const strong = b.conf >= confident;
     const color = strong ? "#2ecc71" : "#f5a623";
     ctx.strokeStyle = color;
     ctx.setLineDash(strong ? [] : [6, 4]);
