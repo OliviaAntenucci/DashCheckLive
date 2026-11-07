@@ -21,9 +21,9 @@ LLM_TIMEOUT_SECONDS = 15
 VISION_BACKEND = os.getenv("VISION_BACKEND", "openrouter").lower()
 VISION_MODEL = os.getenv("VISION_MODEL", "google/gemini-2.5-flash")
 VISION_FALLBACK = os.getenv("VISION_FALLBACK", "local").lower()  # "local" or "none"
-VISION_MIN_INTERVAL = float(os.getenv("VISION_MIN_INTERVAL", "1.5"))  # seconds between calls (cost cap)
+VISION_MIN_INTERVAL = float(os.getenv("VISION_MIN_INTERVAL", "0.8"))  # min seconds between call starts (cost cap)
 VISION_TIMEOUT_SECONDS = 20
-VISION_MAX_SIDE = 768  # downscale before upload: less data out, lower cost
+VISION_MAX_SIDE = int(os.getenv("VISION_MAX_SIDE", "640"))  # downscale before upload: faster, less data out
 
 # Local detection: open-vocabulary YOLO-World + COCO-trained YOLO11, merged.
 # Weights download into backend/ on first run.

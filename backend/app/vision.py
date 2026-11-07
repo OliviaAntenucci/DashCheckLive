@@ -47,6 +47,8 @@ If you think an object is present but are unsure, count it and set confidence "l
 
 _call_lock = threading.Lock()
 _last_call = 0.0
+# Reuse one HTTPS connection to OpenRouter instead of a new TLS handshake per frame.
+_session = requests.Session()
 
 
 def _prepare_image(image_bytes: bytes) -> tuple[str, int, int]:
@@ -60,7 +62,7 @@ def _prepare_image(image_bytes: bytes) -> tuple[str, int, int]:
     width, height = img.size
     img.thumbnail((config.VISION_MAX_SIDE, config.VISION_MAX_SIDE))
     buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=80)  # fresh encode: no EXIF carried over
+    img.save(buf, format="JPEG", quality=75)  # fresh encode: no EXIF carried over
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode(), width, height
 
 
@@ -127,7 +129,7 @@ def openrouter_detect(image_bytes: bytes, labels: list[str]) -> dict:
         if wait > 0:
             raise VisionBusy("rate limited")
         _last_call = time.time()
-        response = requests.post(
+        response = _session.post(
             config.OPENROUTER_URL,
             headers={
                 "Authorization": f"Bearer {config.OPENROUTER_KEY}",
@@ -137,10 +139,13 @@ def openrouter_detect(image_bytes: bytes, labels: list[str]) -> dict:
             json={
                 "model": config.VISION_MODEL,
                 "temperature": 0,
-                "max_tokens": 800,
+                "max_tokens": 500,
                 "response_format": {"type": "json_object"},
-                # Only route to providers that don't store or train on our frames.
-                "provider": {"data_collection": "deny"},
+                # Counting doesn't need step-by-step "thinking"; it added seconds per frame.
+                "reasoning": {"enabled": False},
+                # Only route to providers that don't store or train on our frames,
+                # and among those prefer the fastest.
+                "provider": {"data_collection": "deny", "sort": "latency"},
                 "messages": [
                     {"role": "system", "content": _SYSTEM_PROMPT},
                     {"role": "user", "content": [

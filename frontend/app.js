@@ -686,24 +686,30 @@ function readyToCheck() {
 
 async function liveLoop() {
   if (!state.camOn) return;
-  // OpenRouter is rate-limited server-side (~1.5 s); local YOLO can go faster.
-  let delay = state.frameInterval || 400;
+  // The interval is measured from when this frame was sent, not after the answer
+  // comes back: the old fixed wait after each response added 1.5 s per update.
+  const started = Date.now();
+  const interval = state.frameInterval || 400;
+  let delay = 0;
   const v = $("#video");
   if (!state.photoMode && readyToCheck() && v.videoWidth && !document.hidden) {
-    // 960 px wide keeps small items (sauce cups, forks) big enough to detect.
-    const scale = Math.min(1, 960 / v.videoWidth);
+    // 800 px is plenty; the server downsizes to 640 for OpenRouter anyway.
+    const scale = Math.min(1, 800 / v.videoWidth);
     grab.width = Math.round(v.videoWidth * scale);
     grab.height = Math.round(v.videoHeight * scale);
     grab.getContext("2d").drawImage(v, 0, 0, grab.width, grab.height);
-    const blob = await new Promise((r) => grab.toBlob(r, "image/jpeg", 0.85));
+    const blob = await new Promise((r) => grab.toBlob(r, "image/jpeg", 0.8));
     try {
       await sendFrame(blob, "live");
+      delay = Math.max(50, interval - (Date.now() - started));
     } catch (e) {
-      if (e.code === "busy") { delay = 500; }
+      if (e.code === "busy") { delay = 200; }
       else if (e.code === "loading") { $("#cam-msg").textContent = e.message; delay = 2000; pollHealth(); }
       else if (e.status === 409) { /* order sealed meanwhile */ }
       else { $("#cam-msg").textContent = e.message; delay = 3000; }
     }
+  } else {
+    delay = 400; // nothing to check yet
   }
   setTimeout(liveLoop, delay);
 }
@@ -737,7 +743,7 @@ async function sendFrame(blob, mode) {
   state.lastResult = r;
   const found = Object.values(r.counts || {}).reduce((a, b) => a + b, 0) || r.boxes.length;
   $("#cam-msg").textContent = `${found} objects · ${r.model || "vision"}${r.fallback_reason ? ` (OpenRouter failed: ${r.fallback_reason})` : ""} · frame ${r.frame_sha256.slice(0, 10)}…`;
-  announceDetections(id, r.items);
+  announceDetections(id, r);
   renderChecklist(r.items);
   if ($("#stage-msg").textContent) updateStageMsg();
   refreshLog();
@@ -745,22 +751,85 @@ async function sendFrame(blob, mode) {
 
 function clearOverlay() {
   state.lastResult = null;
+  flashes.length = 0;
+  const c = $("#overlay");
+  c.getContext("2d").clearRect(0, 0, c.width, c.height);
   $("#banner").classList.add("hidden");
   $("#cam-msg").textContent = "";
 }
 
-// Instead of boxes on the video: a short "Bottle detected!" toast whenever an
-// item's count goes up. Counts are sticky, so each item announces once per unit.
+// When an item's count goes up: a "Bottle detected!" toast plus a box around it
+// that shows for 2 s and fades. Counts are sticky, so each unit announces once.
 const seenCounts = {}; // orderId -> {label: last detected}
 
-function announceDetections(orderId, items) {
+function announceDetections(orderId, r) {
   const seen = (seenCounts[orderId] = seenCounts[orderId] || {});
-  for (const i of items) {
+  const fresh = new Set();
+  for (const i of r.items) {
     if (i.expected > 0 && i.detected > (seen[i.label] || 0)) {
       showToast(i);
+      fresh.add(i.label);
     }
     seen[i.label] = i.detected;
   }
+  if (fresh.size) flashBoxes(r, fresh);
+}
+
+const FLASH_MS = 2000;
+const flashes = []; // {b, w, h, until}
+let flashRaf = null;
+
+function flashBoxes(r, labels) {
+  const until = performance.now() + FLASH_MS;
+  for (const b of r.boxes || []) {
+    if (labels.has(b.label)) flashes.push({ b, w: r.width, h: r.height, until });
+  }
+  if (!flashRaf) flashRaf = requestAnimationFrame(drawFlashes);
+}
+
+function drawFlashes() {
+  flashRaf = null;
+  const c = $("#overlay");
+  const dpr = window.devicePixelRatio || 1;
+  const cw = c.clientWidth, ch = c.clientHeight;
+  if (c.width !== cw * dpr || c.height !== ch * dpr) { c.width = cw * dpr; c.height = ch * dpr; }
+  const ctx = c.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cw, ch);
+
+  const now = performance.now();
+  for (let i = flashes.length - 1; i >= 0; i--) if (flashes[i].until <= now) flashes.splice(i, 1);
+  if (!flashes.length) return;
+
+  // Live video uses object-fit: cover, uploaded photos use contain.
+  const media = state.photoMode ? $("#photo") : $("#video");
+  ctx.lineWidth = 4;
+  ctx.font = "800 15px system-ui, sans-serif";
+  for (const f of flashes) {
+    const nw = media.videoWidth || media.naturalWidth || f.w;
+    const nh = media.videoHeight || media.naturalHeight || f.h;
+    const s = state.photoMode ? Math.min(cw / nw, ch / nh) : Math.max(cw / nw, ch / nh);
+    const ox = (cw - nw * s) / 2, oy = (ch - nh * s) / 2;
+    const k = (nw / f.w) * s;
+    const [x1, y1, x2, y2] = f.b.box.map((v, i) => (i % 2 ? oy : ox) + v * k);
+    const left = f.until - now;
+    ctx.globalAlpha = Math.min(1, left / 400); // fade out over the last 0.4 s
+    ctx.strokeStyle = "#ff3008";
+    ctx.beginPath();
+    ctx.roundRect(x1, y1, x2 - x1, y2 - y1, 14);
+    ctx.stroke();
+    const text = f.b.label;
+    const tw = ctx.measureText(text).width + 18;
+    const ty = Math.max(0, y1 - 28);
+    ctx.fillStyle = "#ff3008";
+    ctx.beginPath();
+    ctx.roundRect(x1, ty, tw, 24, 12);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.fillText(text, x1 + 9, ty + 17);
+  }
+  ctx.globalAlpha = 1;
+  flashRaf = requestAnimationFrame(drawFlashes);
 }
 
 function showToast(item) {
