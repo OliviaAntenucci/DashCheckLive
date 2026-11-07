@@ -7,139 +7,143 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">DashCheck<span>Live</span></div>
-    <div class="tagline">Merchant app · Packing check before handoff</div>
-    <div id="health" class="health"></div>
-  </header>
 
-  <main class="layout">
-    <!-- Restaurant staff: merchant tablet -->
-    <section class="merchant">
-      <div id="staff-login" class="card login">
-        <h2>Restaurant staff sign-in</h2>
-        <p class="muted">Demo: <code>staff-olivia</code> / <code>4242</code></p>
-        <form id="staff-login-form">
-          <input name="user_id" placeholder="Staff ID" autocomplete="username" required>
-          <input name="pin" type="password" placeholder="PIN" autocomplete="current-password" required>
-          <button type="submit">Sign in</button>
-        </form>
-        <p id="staff-login-error" class="error"></p>
+  <!-- ============ Sign-in page ============ -->
+  <section id="view-login" class="view login-view">
+    <div class="login-card">
+      <div class="brand big">DashCheck<span>Live</span></div>
+      <p class="login-sub">Packing check for restaurant staff · DoorDash merchant tools</p>
+      <form id="login-form" autocomplete="off">
+        <label>User ID<input name="user_id" autocomplete="username" placeholder="staff-olivia" required></label>
+        <label>PIN<input name="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="••••" required></label>
+        <button type="submit" class="btn primary wide">Sign in</button>
+      </form>
+      <p id="login-error" class="error"></p>
+      <details class="demo-accounts">
+        <summary>Demo accounts</summary>
+        <table>
+          <tr><th>ID</th><th>PIN</th><th>Opens</th></tr>
+          <tr><td>staff-olivia</td><td>4242</td><td>Packing station</td></tr>
+          <tr><td>staff-jordan</td><td>1357</td><td>Packing station</td></tr>
+          <tr><td>dasher-ava</td><td>1111</td><td>Dasher pickup</td></tr>
+          <tr><td>dasher-ben</td><td>2222</td><td>Dasher pickup</td></tr>
+          <tr><td>dasher-cy</td><td>3333</td><td>Dasher pickup</td></tr>
+          <tr><td>dasher-dee</td><td>4444</td><td>Dasher pickup</td></tr>
+        </table>
+      </details>
+      <p class="fineprint">Prototype. Orders are fictional sample data, not real DoorDash orders.</p>
+    </div>
+  </section>
+
+  <!-- ============ Packing station (restaurant staff) ============ -->
+  <section id="view-station" class="view station hidden">
+    <header class="station-bar">
+      <div class="brand">DashCheck<span>Live</span></div>
+      <div id="store-name" class="store"></div>
+      <div id="health" class="health"></div>
+      <div class="bar-actions">
+        <span id="who" class="who"></span>
+        <button id="open-log" class="btn ghost small">Audit log</button>
+        <button id="demo-reset" class="btn ghost small">Reset demo</button>
+        <button id="logout" class="btn ghost small">Sign out</button>
+      </div>
+    </header>
+
+    <div class="station-grid">
+      <!-- Left: queue + receipt -->
+      <aside class="panel left">
+        <div class="panel-title">Orders <span id="queue-count" class="count"></span></div>
+        <ul id="queue" class="queue"></ul>
+        <div id="receipt" class="receipt hidden"></div>
+      </aside>
+
+      <!-- Center: full-height camera -->
+      <div class="camera-pane">
+        <div id="stage" class="stage">
+          <video id="video" autoplay playsinline muted></video>
+          <img id="photo" class="hidden" alt="Uploaded check photo">
+          <canvas id="overlay"></canvas>
+          <div id="banner" class="banner hidden"></div>
+          <div id="stage-msg" class="stage-msg">Starting camera…</div>
+        </div>
+        <div class="camera-controls">
+          <select id="camera-select" title="Camera"></select>
+          <button id="cam-toggle" class="btn ghost small">Pause</button>
+          <label class="btn ghost small">Upload photo<input id="upload" type="file" accept="image/jpeg,image/png,image/webp"></label>
+          <span id="cam-msg" class="cam-msg"></span>
+        </div>
       </div>
 
-      <div id="staff-app" class="hidden">
-        <div class="staff-bar">
-          <span>Signed in as <strong id="staff-name"></strong> (merchant_staff)</span>
-          <span>
-            <button id="demo-reset" class="ghost">Reset demo orders</button>
-            <button id="staff-logout" class="ghost">Sign out</button>
-          </span>
+      <!-- Right: checklist + seal -->
+      <aside class="panel right">
+        <div class="panel-title">Packing checklist</div>
+        <div id="allergy" class="allergy hidden"></div>
+        <div id="prep" class="prep hidden"></div>
+        <div id="checklist" class="checklist"><p class="muted">Pick an order on the left.</p></div>
+
+        <div id="seal-box" class="seal hidden">
+          <label class="check"><input type="checkbox" id="confirm"> I'm done: I checked this order, including prep &amp; allergy notes</label>
+          <button id="seal" class="btn primary wide" disabled>Seal &amp; release to Dasher</button>
+          <p id="seal-error" class="error"></p>
         </div>
+        <div id="done-box" class="done hidden"></div>
+      </aside>
+    </div>
 
-        <div class="grid">
-          <aside class="card queue">
-            <h3>Orders</h3>
-            <ul id="queue"></ul>
-          </aside>
-
-          <div class="card work">
-            <div id="order-empty" class="muted">Select an order.</div>
-            <div id="order-view" class="hidden">
-              <div class="order-head">
-                <h2 id="order-title"></h2>
-                <span id="order-status" class="pill"></span>
-              </div>
-              <div id="allergy" class="allergy hidden"></div>
-              <ul id="order-items" class="items"></ul>
-
-              <div id="prepare-box">
-                <p class="muted">Customer note is hidden until it has been scrubbed of personal data.</p>
-                <button id="prepare">Build packing checklist</button>
-              </div>
-
-              <div id="checked-box" class="hidden">
-                <div class="note">
-                  <div class="label">Customer note (scrubbed)</div>
-                  <div id="note-text"></div>
-                  <div id="redactions" class="muted small"></div>
-                  <div id="parser-used" class="muted small"></div>
-                </div>
-                <div id="prep" class="prep hidden"></div>
-
-                <div class="camera">
-                  <div class="stage" id="stage">
-                    <video id="video" autoplay playsinline muted></video>
-                    <img id="photo" class="hidden" alt="Uploaded check photo">
-                    <canvas id="overlay"></canvas>
-                    <div id="stage-empty" class="stage-empty">Lay items flat in the check zone, then start the camera.</div>
-                  </div>
-                  <div class="camera-controls">
-                    <button id="cam-toggle">Start camera</button>
-                    <label class="upload ghost">Upload photo<input id="upload" type="file" accept="image/jpeg,image/png,image/webp"></label>
-                    <span id="cam-msg" class="muted small"></span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="card side">
-            <h3>Packing checklist</h3>
-            <div id="checklist" class="muted">Build the checklist first.</div>
-
-            <div id="seal-box" class="seal hidden">
-              <label class="check"><input type="checkbox" id="prep-ack"> I followed the prep instructions / allergy flags</label>
-              <label class="check"><input type="checkbox" id="confirm"> I checked this order and it is complete</label>
-              <button id="seal" disabled>Seal &amp; release to Dasher</button>
-              <p id="seal-error" class="error"></p>
-            </div>
-
-            <div id="qr-box" class="qr hidden">
-              <div class="label">Pickup QR · <span id="qr-dasher"></span></div>
-              <img id="qr" alt="One-time pickup QR code">
-              <p class="muted small">Signed, one-time, expires in <span id="qr-ttl"></span>. Valid only for the assigned Dasher.</p>
-              <button id="send-to-phone" class="ghost">Show to Dasher phone →</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="card log">
-          <div class="log-head">
-            <h3>Audit log</h3>
-            <span id="chain" class="pill"></span>
-          </div>
-          <ol id="log"></ol>
-        </div>
+    <!-- Audit log drawer -->
+    <div id="log-drawer" class="drawer hidden">
+      <div class="drawer-head">
+        <strong>Audit log</strong>
+        <span id="chain" class="pill"></span>
+        <button id="close-log" class="btn ghost small">Close</button>
       </div>
-    </section>
+      <ol id="log"></ol>
+    </div>
 
-    <!-- Dasher phone simulator -->
-    <section class="phone">
-      <div class="phone-frame">
-        <div class="phone-title">Dasher app (simulated)</div>
-        <div id="dasher-login">
-          <form id="dasher-login-form">
-            <select name="user_id">
-              <option value="dasher-ava">dasher-ava (PIN 1111)</option>
-              <option value="dasher-ben">dasher-ben (PIN 2222)</option>
-              <option value="dasher-cy">dasher-cy (PIN 3333)</option>
+    <!-- Seal / QR modal -->
+    <div id="qr-modal" class="modal hidden">
+      <div class="modal-card">
+        <h2>Order sealed ✓</h2>
+        <p id="qr-sub" class="muted"></p>
+        <img id="qr" alt="One-time pickup QR code">
+        <p class="small muted">Signed · one-time · expires in <span id="qr-ttl"></span> · only valid for the assigned Dasher</p>
+        <div class="sim">
+          <div class="label">Dasher scan (simulated)</div>
+          <div class="sim-row">
+            <select id="sim-dasher">
+              <option value="dasher-ava">dasher-ava</option>
+              <option value="dasher-ben">dasher-ben</option>
+              <option value="dasher-cy">dasher-cy</option>
+              <option value="dasher-dee">dasher-dee</option>
             </select>
-            <input name="pin" type="password" placeholder="PIN" required>
-            <button type="submit">Sign in</button>
-          </form>
-          <p id="dasher-login-error" class="error"></p>
+            <input id="sim-pin" type="password" inputmode="numeric" placeholder="PIN">
+            <button id="sim-scan" class="btn">Scan</button>
+          </div>
+          <div id="sim-result" class="sim-result"></div>
         </div>
-        <div id="dasher-app" class="hidden">
-          <p>Signed in as <strong id="dasher-name"></strong></p>
-          <label class="small muted" for="scan-token">Scanned QR payload</label>
-          <textarea id="scan-token" rows="4" placeholder="Scan the QR at the counter"></textarea>
-          <button id="scan">Confirm pickup</button>
-          <div id="scan-result" class="scan-result"></div>
-          <button id="dasher-logout" class="ghost">Switch Dasher</button>
+        <div class="modal-actions">
+          <button id="copy-code" class="btn ghost small">Copy pickup code</button>
+          <button id="qr-close" class="btn primary">Next order →</button>
         </div>
       </div>
-    </section>
-  </main>
+    </div>
+  </section>
+
+  <!-- ============ Dasher pickup ============ -->
+  <section id="view-dasher" class="view dasher-view hidden">
+    <div class="dasher-card">
+      <div class="brand">DashCheck<span>Live</span> <small>Dasher</small></div>
+      <p>Signed in as <strong id="dasher-name"></strong></p>
+      <label class="label" for="scan-token">Pickup code (from the counter QR)</label>
+      <textarea id="scan-token" rows="5" placeholder="Scan or paste the pickup code"></textarea>
+      <div class="row">
+        <button id="paste-token" class="btn ghost">Paste</button>
+        <button id="scan" class="btn primary">Confirm pickup</button>
+      </div>
+      <div id="scan-result" class="sim-result"></div>
+      <button id="dasher-logout" class="btn ghost small">Sign out</button>
+    </div>
+  </section>
 
   <script src="app.js"></script>
 </body>

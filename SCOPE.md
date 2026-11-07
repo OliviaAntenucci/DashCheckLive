@@ -6,11 +6,11 @@ A feature DoorDash ships in the **merchant app**, at the moment staff mark an or
 
 ## In scope (MVP)
 
-- Seeded orders (3) with messy notes, PII to scrub, and one prompt-injection attempt
-- Staff and Dasher sign-in (demo PINs), role-based access
+- 8 fictional sample receipts laid out like DoorDash merchant receipts (clearly labeled demo data), with messy notes, modifiers, PII to scrub, and one prompt-injection attempt
+- Sign-in page → role-based landing: full-screen packing station (staff) or pickup screen (Dasher)
 - PII scrubbing before any AI call
 - Note → checklist via OpenRouter (`gpt-4o-mini`) with allow-list validation; offline rules fallback
-- Local YOLO-World detection on a laptop webcam, ~2 fps, 5-frame median smoothing
+- Local detection on a laptop webcam: YOLO-World (multi-prompt) + YOLO11-COCO merged, ~2 fps, 2-of-5 frame smoothing
 - Photo upload fallback
 - Checklist statuses: ok / missing / check manually / unexpected
 - Staff confirm + per-item override reasons; seal enforced server-side
@@ -19,7 +19,7 @@ A feature DoorDash ships in the **merchant app**, at the moment staff mark an or
 
 ## Demo constraints
 
-- Short list of easy-to-detect props: sandwich, bottle, donut, apple, banana, orange, fork, small sauce cup
+- Short list of easy-to-detect props: bottle, can, sandwich, hot dog, pizza slice, donut, apple, banana, orange, fork, small sauce cup
 - Plain light background, good lighting, items laid **flat, outside the bag**
 - Test props in the first hour; adjust labels/thresholds in `orders.py` / `.env`
 

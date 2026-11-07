@@ -59,10 +59,15 @@ AI assists; people decide. The model never seals an order.
        allergy flags. LLM via OpenRouter; deterministic rules fallback.
   FR4  LLM output is validated against an allow-list; notes cannot remove paid
        items; parser used is recorded.
-  FR5  Camera frames (~2 fps) or an uploaded photo are processed locally by an
-       open-vocabulary detector using labels derived from the order.
-  FR6  Counts are smoothed (median of last 5 frames); boxes >= 0.35 confidence
-       count; 0.20–0.35 produce "check manually".
+  FR5  Camera frames (~2 fps) or an uploaded photo are processed locally by two
+       detectors (open-vocabulary YOLO-World with several prompts per item, and
+       COCO-trained YOLO11), merged with non-max suppression.
+  FR6  A count must appear in 2 of the last 5 frames; boxes >= 0.25 confidence
+       count; 0.10–0.25 produce "check manually".
+  FR13 Sign-in page routes by role: staff → full-screen camera packing station
+       (queue + receipt left, checklist right); Dasher → pickup screen.
+  FR14 Demo input is 8 fictional sample receipts in a DoorDash-like layout,
+       loaded from JSON and clearly labeled as sample data.
   FR7  Checklist rows: ok / missing / check manually / unexpected (excluded item
        present).
   FR8  Seal requires: signed-in staff, explicit confirmation, prep/allergy

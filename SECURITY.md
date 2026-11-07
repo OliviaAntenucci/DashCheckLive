@@ -21,7 +21,7 @@ DashCheckLive is a feature DoorDash provides inside its merchant app. **Restaura
 | **Spoofing** | Someone uses the tablet to seal; a stranger claims to be the Dasher | PIN login → HMAC-signed session tokens with role + expiry; pickup identity comes from the Dasher's session, never the request body | `security.py` `login`, `require_role`; `main.py` `pickup` |
 | **Tampering** | Edit the log to hide an override; forge a pickup QR; swap the verification photo | HMAC-SHA256 on all tokens (constant-time compare); hash-chained log; SHA-256 of the verifying frame recorded at seal | `security.py` `sign/verify`; `ledger.py`; `main.py` `seal_order` |
 | **Repudiation** | “I never overrode that” | Every prepare/check/seal/override/pickup/rejection is logged with actor ID | `ledger.py`, all routes |
-| **Information disclosure** | Phone number on the packing screen; note sent to an LLM with the address in it; photos uploaded to a cloud model | Scrub before AI; minimized `public()` view; frames processed locally and discarded; no PII in logs; `Cache-Control: no-store` | `scrub.py`, `orders.py` `public`, `detector.py`, `main.py` |
+| **Information disclosure** | Phone number on the packing screen; note sent to an LLM with the address in it; photos uploaded to a cloud model; gate code shown to kitchen staff | Scrub before AI and before display (phone, email, address, card, URL, gate/door codes, customer name); minimized `public()` view; frames processed locally and discarded; no PII in logs; `Cache-Control: no-store` | `scrub.py`, `orders.py` `public`, `detector.py`, `main.py` |
 | **Denial of service** | Huge upload; PIN brute force | 5 MB frame cap + type allow-list + image verify; 5 failures → 60 s lockout | `config.py`, `main.py` `check_frame`, `security.py` |
 | **Elevation of privilege** | Dasher token used to seal; session token replayed as pickup QR | Role-based access per endpoint; token **purpose** baked into the HMAC (domain separation) | `require_role`; `sign(..., purpose)` |
 
@@ -43,7 +43,7 @@ DashCheckLive is a feature DoorDash provides inside its merchant app. **Restaura
 - **Defense in depth** — prompt hardening + output validation + no-authority model + human seal.
 - **Zero trust on inputs** — notes, images, tokens and LLM output are all validated before use.
 - **Secure by default** — random signing key if none configured; seal disabled until rules are met (and re-checked server-side).
-- **Human in the loop** — overrides require a reason and are attributable.
+- **Human in the loop** — overrides require a reason and are attributable. The staff UI never blocks a seal: if staff don't type a reason, it sends “Staff confirmed; camera did not match”. The server still requires a reason for every unmatched row and logs each one, so a disputed order shows exactly which items were sealed without a camera match.
 - **Secrets management** — keys in `.env`, git-ignored; OpenRouter auto-revokes committed keys.
 
 ## Pickup QR design
@@ -63,7 +63,11 @@ Each event stores `prev` (hash of the previous event) and `hash = SHA-256(event 
 
 ## Browser hardening
 
-CSP `default-src 'self'` (no inline script, no third-party origins), `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy: camera=(self)`. Session tokens are held in JS memory (not `localStorage`), and all dynamic text is rendered via `textContent` to avoid XSS.
+CSP `default-src 'self'` (no inline script, no third-party origins), `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy: camera=(self)`. All dynamic text is rendered via `textContent` to avoid XSS.
+
+Session tokens are kept in `sessionStorage` so a page refresh doesn't sign staff out mid-rush. Trade-off: unlike in-memory storage, script running on the page could read it. The strict CSP and no-`innerHTML` rule are what mitigate that. `sessionStorage` is per tab and cleared when the tab closes, which is narrower than `localStorage`. Production would use an `HttpOnly; Secure; SameSite=Strict` cookie instead.
+
+The simulated Dasher scan on the staff screen signs the Dasher in with **their own** ID and PIN; it never reuses the staff session.
 
 ## Known prototype gaps (not production-ready)
 

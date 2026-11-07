@@ -15,5 +15,6 @@ requests>=2.31
 pillow>=10.0
 qrcode[pil]>=7.4
 
-# Local computer vision (YOLO-World; pulls in PyTorch)
-ultralytics>=8.1
+# Local computer vision (YOLO-World + YOLO11; pulls in PyTorch)
+ultralytics>=8.3
+clip @ git+https://github.com/ultralytics/CLIP.git

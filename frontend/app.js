@@ -1,27 +1,30 @@
 // DashCheckLive frontend. Plain JS, no build step.
-// Session tokens are kept in memory only (not localStorage), and all
-// server/customer text is rendered with textContent, never innerHTML.
+// All server/customer text is rendered with textContent, never innerHTML.
+// The session token lives in sessionStorage: per-tab, cleared when the tab closes.
 
 const $ = (sel) => document.querySelector(sel);
 
 const state = {
-  staffToken: null,
-  dasherToken: null,
+  session: null,      // {token, user_id, role}
+  storeName: "",
   orders: [],
-  current: null,      // full order object from /api/orders/:id
-  overrides: {},      // label -> reason typed by staff
+  current: null,      // full order from /api/orders/:id
+  overrides: {},      // orderId -> {label: reason}
   checklistKey: "",
-  live: false,
   stream: null,
+  camOn: false,
+  photoMode: false,
+  lastResult: null,
   lastToken: null,
+  healthTimer: null,
 };
 
-// ---------- helpers ----------
+// ---------------- helpers ----------------
 
 function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
   Object.assign(node, props);
-  for (const c of children) node.append(c);
+  for (const c of children) if (c != null) node.append(c);
   return node;
 }
 
@@ -34,189 +37,261 @@ async function api(path, { token, method = "GET", json, form } = {}) {
   const res = await fetch(path, { method, headers, body });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(typeof data.detail === "string" ? data.detail : `HTTP ${res.status}`);
+    const d = data.detail;
+    const err = new Error(typeof d === "string" ? d : (d && d.message) || `HTTP ${res.status}`);
     err.status = res.status;
+    err.code = d && d.code;
     throw err;
   }
   return data;
 }
 
-function staffApi(path, opts = {}) {
-  return api(path, { ...opts, token: state.staffToken }).catch((e) => {
-    if (e.status === 401) staffLogout();
+function authed(path, opts = {}) {
+  return api(path, { ...opts, token: state.session && state.session.token }).catch((e) => {
+    if (e.status === 401) signOut("Session expired. Sign in again.");
     throw e;
   });
 }
 
-const pillClass = { new: "", prepared: "warn", sealed: "ok", picked_up: "ok" };
-
-// ---------- health ----------
-
-async function loadHealth() {
-  const h = await api("/api/health");
-  const box = $("#health");
-  box.replaceChildren(
-    el("span", { className: `pill ${h.detector.startsWith("ready") || h.detector.startsWith("available") ? "ok" : "warn"}`, textContent: `Vision (local): ${h.detector}` }),
-    el("span", { className: `pill ${h.parser.startsWith("openrouter") ? "ok" : "warn"}`, textContent: `Parser: ${h.parser}` }),
-    el("span", { className: "pill ok", textContent: "Images stay on device" }),
-  );
+function show(view) {
+  for (const v of ["#view-login", "#view-station", "#view-dasher"]) $(v).classList.toggle("hidden", v !== view);
 }
 
-// ---------- staff auth ----------
+function money(n) { return `$${n.toFixed(2)}`; }
 
-$("#staff-login-form").addEventListener("submit", async (e) => {
+// ---------------- sign in / out ----------------
+
+$("#login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const f = new FormData(e.target);
+  $("#login-error").textContent = "";
   try {
-    const s = await api("/api/auth/login", { method: "POST", json: { user_id: f.get("user_id"), pin: f.get("pin") } });
-    if (s.role !== "merchant_staff") throw new Error("This account is not restaurant staff");
-    state.staffToken = s.token;
-    $("#staff-name").textContent = s.user_id;
-    $("#staff-login").classList.add("hidden");
-    $("#staff-app").classList.remove("hidden");
-    $("#staff-login-error").textContent = "";
+    const s = await api("/api/auth/login", { method: "POST", json: { user_id: f.get("user_id").trim(), pin: f.get("pin") } });
     e.target.reset();
-    await refreshQueue();
-    await refreshLog();
+    startSession(s);
   } catch (err) {
-    $("#staff-login-error").textContent = err.message;
+    $("#login-error").textContent = err.message;
   }
 });
 
-function staffLogout() {
-  stopCamera();
-  state.staffToken = null;
-  state.current = null;
-  $("#staff-app").classList.add("hidden");
-  $("#staff-login").classList.remove("hidden");
+function startSession(s) {
+  state.session = s;
+  try { sessionStorage.setItem("dcl-session", JSON.stringify(s)); } catch {}
+  if (s.role === "merchant_staff") enterStation();
+  else enterDasher();
 }
-$("#staff-logout").addEventListener("click", staffLogout);
 
-$("#demo-reset").addEventListener("click", async () => {
-  await staffApi("/api/demo/reset", { method: "POST" });
+function signOut(message = "") {
   stopCamera();
+  clearTimeout(state.healthTimer);
+  state.session = null;
   state.current = null;
-  $("#order-view").classList.add("hidden");
-  $("#order-empty").classList.remove("hidden");
-  $("#qr-box").classList.add("hidden");
-  await refreshQueue();
-  await refreshLog();
-});
+  try { sessionStorage.removeItem("dcl-session"); } catch {}
+  $("#qr-modal").classList.add("hidden");
+  $("#log-drawer").classList.add("hidden");
+  $("#login-error").textContent = message;
+  show("#view-login");
+}
+$("#logout").addEventListener("click", () => signOut());
+$("#dasher-logout").addEventListener("click", () => signOut());
 
-// ---------- queue + order ----------
+// ---------------- station ----------------
+
+async function enterStation() {
+  show("#view-station");
+  $("#who").textContent = state.session.user_id;
+  pollHealth();
+  await refreshQueue();
+  startCamera();
+}
+
+async function pollHealth() {
+  clearTimeout(state.healthTimer);
+  const h = await api("/api/health").catch(() => null);
+  if (!h) return;
+  const d = h.detector;
+  let text, cls;
+  if (d.state === "ready") { text = `Vision: ${d.backends.join(" + ")}`; cls = "ok"; }
+  else if (d.state === "loading") { text = "Vision: loading models…"; cls = "warn"; }
+  else { text = `Vision: ${d.state}`; cls = "bad"; }
+  $("#health").replaceChildren(
+    el("span", { className: `pill ${cls}`, textContent: text, title: JSON.stringify(d.errors || {}) }),
+    el("span", { className: `pill ${h.parser.startsWith("openrouter") ? "ok" : "warn"}`, textContent: `Notes: ${h.parser}` }),
+    el("span", { className: "pill ok", textContent: "Images stay on device" }),
+  );
+  if (d.state === "loading" || d.state === "idle") state.healthTimer = setTimeout(pollHealth, 3000);
+}
 
 async function refreshQueue() {
-  state.orders = await staffApi("/api/orders");
-  const ul = $("#queue");
-  ul.replaceChildren(...state.orders.map((o) => {
+  const r = await authed("/api/orders");
+  state.orders = r.orders;
+  $("#store-name").textContent = r.store;
+  $("#queue-count").textContent = r.orders.filter((o) => o.status !== "picked_up").length;
+  $("#queue").replaceChildren(...r.orders.map((o) => {
+    const statusCls = { new: "", prepared: "warn", sealed: "ok", picked_up: "ok" }[o.status] || "";
     const li = el("li", {},
-      el("div", { textContent: `#${o.id} · ${o.display_name}` }),
-      el("div", { className: "meta", textContent: `${o.item_count} items · ${o.status}` }));
+      el("div", {},
+        el("div", {}, el("strong", { textContent: `#${o.id}` }), ` ${o.display_name}`),
+        el("div", { className: "meta", textContent: `${o.item_count} items · ${o.ref} · ${o.dasher_name}` })),
+      el("span", { className: `pill st ${statusCls}`, textContent: o.status.replace("_", " ") }));
     if (state.current && state.current.id === o.id) li.classList.add("active");
     li.addEventListener("click", () => openOrder(o.id));
     return li;
   }));
 }
 
-async function openOrder(id) {
-  stopCamera();
+$("#demo-reset").addEventListener("click", async () => {
+  await authed("/api/demo/reset", { method: "POST" });
+  state.current = null;
   state.overrides = {};
+  clearOverlay();
+  $("#receipt").classList.add("hidden");
+  renderSide();
+  await refreshQueue();
+  refreshLog();
+});
+
+// ---------------- order ----------------
+
+async function openOrder(id) {
   state.checklistKey = "";
-  state.current = await staffApi(`/api/orders/${encodeURIComponent(id)}`);
-  $("#qr-box").classList.add("hidden");
-  $("#confirm").checked = false;
-  $("#prep-ack").checked = false;
-  clearStage();
-  renderOrder();
+  state.lastResult = null;
+  clearOverlay();
+  if (state.photoMode) backToLive();
+  let o = await authed(`/api/orders/${encodeURIComponent(id)}`);
+  state.current = o;
+  renderReceipt();
+  renderSide();
   refreshQueue();
+  if (o.status === "new") {
+    // Scrub the note and build the checklist straight away: one tap for staff.
+    $("#checklist").replaceChildren(el("p", { className: "muted", textContent: "Removing personal info and reading the note…" }));
+    try {
+      o = await authed(`/api/orders/${encodeURIComponent(id)}/prepare`, { method: "POST" });
+      if (state.current && state.current.id === id) {
+        state.current = o;
+        renderReceipt();
+        renderSide();
+      }
+      refreshQueue();
+      refreshLog();
+    } catch (e) {
+      $("#checklist").replaceChildren(el("p", { className: "error", textContent: e.message }));
+    }
+  }
 }
 
-function renderOrder() {
+function renderReceipt() {
   const o = state.current;
-  $("#order-empty").classList.add("hidden");
-  $("#order-view").classList.remove("hidden");
-  $("#order-title").textContent = `Order #${o.id} — ${o.display_name}`;
-  const status = $("#order-status");
-  status.textContent = o.status;
-  status.className = `pill ${pillClass[o.status] || ""}`;
-  $("#order-items").replaceChildren(...o.items.map((i) => el("li", { textContent: `${i.qty} × ${i.name}` })));
+  const r = o.receipt;
+  const box = $("#receipt");
+  const lines = [];
+  for (const l of r.lines) {
+    lines.push(el("div", { className: "r-line" }, el("span", { textContent: `${l.qty}× ${l.name}` }), el("span", { textContent: money(l.total) })));
+    for (const m of l.modifiers) lines.push(el("div", { className: "r-mod", textContent: `• ${m}` }));
+  }
+  const placed = new Date(o.placed_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const red = Object.entries(o.redactions || {}).map(([k, n]) => `${n}× ${k}`).join(", ");
+  box.replaceChildren(
+    el("div", { className: "r-demo", textContent: "SAMPLE RECEIPT · DEMO DATA" }),
+    el("div", { className: "r-center", textContent: "DoorDash order" }),
+    el("div", { className: "r-center r-big", textContent: `#${o.id} · ${o.display_name}` }),
+    el("div", { className: "r-center r-muted", textContent: `${o.store}` }),
+    el("div", { className: "r-center r-muted", textContent: `${o.ref} · ${o.fulfillment} · ${placed}` }),
+    el("hr"),
+    ...lines,
+    el("hr"),
+    el("div", { className: "r-line" }, el("span", { textContent: "Subtotal" }), el("span", { textContent: money(r.subtotal) })),
+    el("div", { className: "r-line" }, el("span", { textContent: "Tax" }), el("span", { textContent: money(r.tax) })),
+    el("div", { className: "r-line r-total" }, el("span", { textContent: "Total" }), el("span", { textContent: money(r.total) })),
+    el("hr"),
+    el("div", { className: "r-muted", textContent: "Customer note" }),
+    el("div", { className: "r-note", textContent: o.status === "new" ? "(hidden until personal info is removed)" : (o.note || "(none)") }),
+    red ? el("div", { className: "r-muted", textContent: `Removed: ${red}` }) : null,
+    el("hr"),
+    el("div", { className: "r-line" }, el("span", { textContent: "Dasher" }), el("span", { textContent: o.dasher_name })),
+    el("div", { className: "r-muted", textContent: "Customer contact hidden from merchant" }),
+  );
+  box.classList.remove("hidden");
+}
 
-  const parsed = o.parsed || {};
+function renderSide() {
+  const o = state.current;
+  const parsed = (o && o.parsed) || {};
   const allergy = $("#allergy");
-  if (parsed.allergy_flags && parsed.allergy_flags.length) {
+  if ((parsed.allergy_flags || []).length) {
     allergy.textContent = `⚠ ALLERGY: ${parsed.allergy_flags.join(", ").toUpperCase()}`;
     allergy.classList.remove("hidden");
   } else allergy.classList.add("hidden");
 
-  const isNew = o.status === "new";
-  $("#prepare-box").classList.toggle("hidden", !isNew);
-  $("#checked-box").classList.toggle("hidden", isNew);
+  const prep = $("#prep");
+  if ((parsed.prep_instructions || []).length) {
+    prep.replaceChildren(el("div", { className: "label", textContent: "Check by hand (camera can't see these)" }),
+      ...parsed.prep_instructions.map((p) => el("div", { textContent: `• ${p}` })));
+    prep.classList.remove("hidden");
+  } else prep.classList.add("hidden");
 
-  if (!isNew) {
-    $("#note-text").textContent = o.note || "(no note)";
-    const red = Object.entries(o.redactions || {}).map(([k, n]) => `${n}× ${k}`).join(", ");
-    $("#redactions").textContent = red ? `Redacted before AI: ${red}` : "No personal data found in note.";
-    $("#parser-used").textContent = `Parsed by: ${parsed.parser || "-"}`;
-    const prep = $("#prep");
-    if (parsed.prep_instructions && parsed.prep_instructions.length) {
-      prep.replaceChildren(el("div", { className: "label", textContent: "Prep (camera can't verify — check by hand)" }),
-        ...parsed.prep_instructions.map((p) => el("div", { textContent: `• ${p}` })));
-      prep.classList.remove("hidden");
-    } else prep.classList.add("hidden");
+  $("#seal-box").classList.toggle("hidden", !o || o.status !== "prepared");
+  $("#confirm").checked = false;
+  $("#seal-error").textContent = "";
+
+  const done = $("#done-box");
+  done.classList.add("hidden");
+  if (!o) {
+    $("#checklist").replaceChildren(el("p", { className: "muted", textContent: "Pick an order on the left." }));
+    setBanner(null);
+    updateStageMsg();
+    return;
   }
-
-  const prepNeeded = (parsed.prep_instructions || []).length || (parsed.allergy_flags || []).length;
-  $("#prep-ack").closest("label").classList.toggle("hidden", !prepNeeded);
-  $("#seal-box").classList.toggle("hidden", o.status !== "prepared");
   if (o.status === "sealed" || o.status === "picked_up") {
-    $("#checklist").replaceChildren(el("p", { textContent: o.status === "sealed" ? "Sealed. Waiting for Dasher pickup." : "Picked up by Dasher." }));
-  } else {
+    $("#checklist").replaceChildren();
+    const s = o.seal || {};
+    done.replaceChildren(
+      el("strong", { textContent: o.status === "sealed" ? "Sealed, waiting for Dasher" : "Picked up ✓" }),
+      el("div", { className: "small muted", textContent: `Sealed by ${s.staff_id || "-"} · vision agreed: ${s.vision_all_ok ? "yes" : "no"}` }),
+      ...Object.entries(s.overrides || {}).map(([k, v]) => el("div", { className: "small", textContent: `Override ${k}: ${v}` })));
+    done.classList.remove("hidden");
+    setBanner(null);
+  } else if (o.status === "prepared") {
     renderChecklist(o.checklist || [], true);
   }
+  updateStageMsg();
 }
 
-$("#prepare").addEventListener("click", async () => {
-  const btn = $("#prepare");
-  btn.disabled = true;
-  btn.textContent = "Scrubbing & parsing…";
-  try {
-    state.current = await staffApi(`/api/orders/${state.current.id}/prepare`, { method: "POST" });
-    renderOrder();
-    refreshQueue();
-    refreshLog();
-  } catch (e) {
-    alert(e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Build packing checklist";
-  }
-});
+// ---------------- checklist + seal ----------------
 
-// ---------- checklist + seal ----------
+const whyText = {
+  missing: (i) => `Add ${i.expected - i.detected} more`,
+  check: () => "Low confidence. Look closely",
+  unexpected: () => "Customer asked to leave this out",
+};
 
-const statusText = { ok: "✓", missing: "MISSING", check: "CHECK MANUALLY", unexpected: "REMOVE?" };
+function overridesFor(id) {
+  return (state.overrides[id] = state.overrides[id] || {});
+}
 
 function renderChecklist(items, force = false) {
-  if (!state.current || state.current.status !== "prepared") return;
-  state.current.checklist = items;
+  const o = state.current;
+  if (!o || o.status !== "prepared") return;
+  o.checklist = items;
+  setBanner(items);
   const key = JSON.stringify(items.map((i) => [i.label, i.detected, i.status]));
   if (!force && key === state.checklistKey) return updateSealButton();
   state.checklistKey = key;
 
-  if (!items.length) {
-    $("#checklist").textContent = "Nothing to check.";
-    return updateSealButton();
-  }
+  const ov = overridesFor(o.id);
   const ul = el("ul");
   for (const i of items) {
-    const want = i.expected === 0 ? "leave out" : `${i.detected}/${i.expected}`;
+    const count = i.expected === 0 ? (i.detected ? "in view" : "left out ✓") : `${i.detected}/${i.expected}${i.status === "ok" ? " ✓" : ""}`;
     const row = el("li", { className: `row ${i.status}` },
       el("div", { className: "top" },
-        el("span", {}, el("strong", { textContent: i.label }), el("span", { className: "muted small", textContent: i.source === "note" ? "  (from note)" : "" })),
-        el("span", { className: `status-${i.status}`, textContent: `${want} ${statusText[i.status]}` })));
+        el("span", {}, el("span", { className: "name", textContent: i.label }),
+          el("span", { className: "src", textContent: i.source === "menu" ? "" : `from ${i.source}` })),
+        el("span", { className: "count-big", textContent: count })),
+      whyText[i.status] ? el("div", { className: "why", textContent: whyText[i.status](i) }) : null);
     if (i.status !== "ok") {
-      const input = el("input", { placeholder: "Override reason (e.g. added by hand, verified visually)", value: state.overrides[i.label] || "", maxLength: 120 });
-      input.addEventListener("input", () => { state.overrides[i.label] = input.value; updateSealButton(); });
+      const input = el("input", { placeholder: "Optional reason, e.g. verified by hand", value: ov[i.label] || "", maxLength: 120 });
+      input.addEventListener("input", () => { ov[i.label] = input.value; updateSealButton(); });
       row.append(input);
     }
     ul.append(row);
@@ -225,36 +300,60 @@ function renderChecklist(items, force = false) {
   updateSealButton();
 }
 
+function setBanner(items) {
+  const b = $("#banner");
+  if (!items || !items.length || !state.lastResult) { b.classList.add("hidden"); return; }
+  const bad = items.filter((i) => i.status === "missing" || i.status === "unexpected");
+  const check = items.filter((i) => i.status === "check");
+  if (!bad.length && !check.length) {
+    b.textContent = "✓ All items present. Confirm & seal";
+    b.className = "banner ok";
+  } else if (bad.length) {
+    b.textContent = bad.map((i) => i.status === "unexpected" ? `Remove ${i.label}` : `Missing ${i.label} ×${i.expected - i.detected}`).join(" · ");
+    b.className = "banner bad";
+  } else {
+    b.textContent = `Check: ${check.map((i) => i.label).join(", ")}`;
+    b.className = "banner warn";
+  }
+}
+
+// Staff can always finish an order once they tick "I'm done". Rows the camera
+// didn't match are sealed as overrides: a typed reason if given, otherwise a
+// default one. Either way the server records each override in the audit log.
+const DEFAULT_OVERRIDE = "Staff confirmed; camera did not match";
+
 function updateSealButton() {
   const o = state.current;
   if (!o || o.status !== "prepared") return;
-  const parsed = o.parsed || {};
-  const prepNeeded = (parsed.prep_instructions || []).length || (parsed.allergy_flags || []).length;
-  const rowsOk = (o.checklist || []).every((i) => i.status === "ok" || (state.overrides[i.label] || "").trim().length >= 3);
-  $("#seal").disabled = !($("#confirm").checked && (!prepNeeded || $("#prep-ack").checked) && rowsOk);
+  const notOk = (o.checklist || []).filter((i) => i.status !== "ok").length;
+  const btn = $("#seal");
+  btn.disabled = !$("#confirm").checked;
+  btn.textContent = notOk
+    ? `Seal anyway · ${notOk} override${notOk > 1 ? "s" : ""} →`
+    : "Seal & release to Dasher →";
 }
 $("#confirm").addEventListener("change", updateSealButton);
-$("#prep-ack").addEventListener("change", updateSealButton);
 
 $("#seal").addEventListener("click", async () => {
+  const o = state.current;
   $("#seal-error").textContent = "";
+  const ov = overridesFor(o.id);
   const overrides = {};
-  for (const i of state.current.checklist || []) {
-    if (i.status !== "ok") overrides[i.label] = state.overrides[i.label] || "";
+  for (const i of o.checklist || []) {
+    if (i.status === "ok") continue;
+    const typed = (ov[i.label] || "").trim();
+    overrides[i.label] = typed.length >= 3 ? typed : DEFAULT_OVERRIDE;
   }
   try {
-    const r = await staffApi(`/api/orders/${state.current.id}/seal`, {
+    const r = await authed(`/api/orders/${o.id}/seal`, {
       method: "POST",
-      json: { confirmed: $("#confirm").checked, prep_acknowledged: $("#prep-ack").checked, overrides },
+      json: { confirmed: $("#confirm").checked, prep_acknowledged: $("#confirm").checked, overrides },
     });
-    stopCamera();
     state.current = r.order;
     state.lastToken = r.pickup_token;
-    $("#qr").src = r.qr_png;
-    $("#qr-dasher").textContent = r.order.dasher_id;
-    $("#qr-ttl").textContent = `${Math.round(r.expires_in / 60)} min`;
-    $("#qr-box").classList.remove("hidden");
-    renderOrder();
+    clearOverlay();
+    renderSide();
+    openQrModal(r);
     refreshQueue();
     refreshLog();
   } catch (e) {
@@ -262,129 +361,240 @@ $("#seal").addEventListener("click", async () => {
   }
 });
 
-$("#send-to-phone").addEventListener("click", () => {
-  $("#scan-token").value = state.lastToken || "";
+// ---------------- QR modal + simulated Dasher scan ----------------
+
+function openQrModal(r) {
+  $("#qr").src = r.qr_png;
+  $("#qr-sub").textContent = `Order #${r.order.id} for ${r.order.display_name} · assigned to ${r.order.dasher_name} (${r.order.dasher_id})`;
+  $("#qr-ttl").textContent = `${Math.round(r.expires_in / 60)} min`;
+  $("#sim-dasher").value = r.order.dasher_id;
+  $("#sim-pin").value = "";
+  $("#sim-result").textContent = "";
+  $("#sim-result").className = "sim-result";
+  $("#qr-modal").classList.remove("hidden");
+}
+
+async function pickupAs(token, pickupToken) {
+  return api("/api/pickup", { method: "POST", token, json: { token: pickupToken } });
+}
+
+$("#sim-scan").addEventListener("click", async () => {
+  const out = $("#sim-result");
+  try {
+    // The Dasher authenticates with their own credentials; the staff session isn't used.
+    const s = await api("/api/auth/login", { method: "POST", json: { user_id: $("#sim-dasher").value, pin: $("#sim-pin").value } });
+    if (s.role !== "dasher") throw new Error("Not a Dasher account");
+    const r = await pickupAs(s.token, state.lastToken);
+    out.textContent = `✓ ${s.user_id} picked up #${r.order_id} (${r.item_count} items)`;
+    out.className = "sim-result ok";
+    if (state.current && state.current.id === r.order_id) {
+      state.current = await authed(`/api/orders/${r.order_id}`);
+      renderSide();
+    }
+  } catch (e) {
+    out.textContent = `✗ ${e.message}`;
+    out.className = "sim-result bad";
+  }
+  refreshQueue();
+  refreshLog();
 });
 
-// ---------- camera + detection ----------
+$("#copy-code").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(state.lastToken || ""); $("#copy-code").textContent = "Copied ✓"; }
+  catch { $("#copy-code").textContent = "Copy failed"; }
+  setTimeout(() => ($("#copy-code").textContent = "Copy pickup code"), 1500);
+});
+
+$("#qr-close").addEventListener("click", () => {
+  $("#qr-modal").classList.add("hidden");
+  const next = state.orders.find((o) => o.status === "new" || o.status === "prepared");
+  if (next) openOrder(next.id);
+});
+
+// ---------------- camera ----------------
 
 const grab = document.createElement("canvas");
 
-function clearStage() {
-  const c = $("#overlay");
-  c.getContext("2d").clearRect(0, 0, c.width, c.height);
-  $("#photo").classList.add("hidden");
-  $("#video").classList.remove("hidden");
-  $("#stage-empty").classList.remove("hidden");
-  $("#cam-msg").textContent = "";
-}
-
-async function startCamera() {
+async function startCamera(deviceId) {
+  stopCamera();
   try {
-    state.stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    state.stream = await navigator.mediaDevices.getUserMedia({
+      video: deviceId ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+                      : { width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
   } catch (e) {
-    $("#cam-msg").textContent = `Camera unavailable (${e.name}). Use photo upload.`;
+    $("#stage-msg").textContent = `Camera unavailable (${e.name}). Use “Upload photo”.`;
     return;
   }
-  clearStage();
-  $("#stage-empty").classList.add("hidden");
   $("#video").srcObject = state.stream;
-  state.live = true;
-  $("#cam-toggle").textContent = "Stop camera";
+  state.camOn = true;
+  $("#cam-toggle").textContent = "Pause";
+  listCameras();
+  updateStageMsg();
   liveLoop();
 }
 
 function stopCamera() {
-  state.live = false;
+  state.camOn = false;
   if (state.stream) state.stream.getTracks().forEach((t) => t.stop());
   state.stream = null;
   $("#video").srcObject = null;
-  $("#cam-toggle").textContent = "Start camera";
+  $("#cam-toggle").textContent = "Resume";
 }
 
-$("#cam-toggle").addEventListener("click", () => (state.live ? stopCamera() : startCamera()));
+async function listCameras() {
+  const devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
+  const current = state.stream && state.stream.getVideoTracks()[0].getSettings().deviceId;
+  $("#camera-select").replaceChildren(...devices.map((d, i) =>
+    el("option", { value: d.deviceId, textContent: d.label || `Camera ${i + 1}`, selected: d.deviceId === current })));
+}
+$("#camera-select").addEventListener("change", (e) => { backToLive(false); startCamera(e.target.value); });
+
+$("#cam-toggle").addEventListener("click", () => {
+  if (state.photoMode) return backToLive();
+  if (state.camOn) { stopCamera(); updateStageMsg("Camera paused"); }
+  else startCamera($("#camera-select").value || undefined);
+});
+
+function backToLive(restart = true) {
+  state.photoMode = false;
+  $("#photo").classList.add("hidden");
+  $("#video").classList.remove("hidden");
+  clearOverlay();
+  if (restart && !state.camOn) startCamera($("#camera-select").value || undefined);
+  $("#cam-toggle").textContent = state.camOn ? "Pause" : "Resume";
+}
+
+function updateStageMsg(override) {
+  const o = state.current;
+  let msg = "";
+  if (override) msg = override;
+  else if (!o) msg = "Pick an order on the left, then lay its items flat in view";
+  else if (o.status === "new") msg = "Building checklist…";
+  else if (o.status === "sealed" || o.status === "picked_up") msg = `Order #${o.id} is ${o.status.replace("_", " ")}. Pick the next order`;
+  $("#stage-msg").textContent = msg;
+}
+
+function readyToCheck() {
+  return state.current && state.current.status === "prepared";
+}
 
 async function liveLoop() {
-  if (!state.live) return;
+  if (!state.camOn) return;
+  let delay = 400;
   const v = $("#video");
-  if (v.videoWidth) {
-    const scale = Math.min(1, 640 / v.videoWidth);
+  if (!state.photoMode && readyToCheck() && v.videoWidth && !document.hidden) {
+    // 960 px wide keeps small items (sauce cups, forks) big enough to detect.
+    const scale = Math.min(1, 960 / v.videoWidth);
     grab.width = Math.round(v.videoWidth * scale);
     grab.height = Math.round(v.videoHeight * scale);
     grab.getContext("2d").drawImage(v, 0, 0, grab.width, grab.height);
-    const blob = await new Promise((r) => grab.toBlob(r, "image/jpeg", 0.75));
+    const blob = await new Promise((r) => grab.toBlob(r, "image/jpeg", 0.85));
     try {
-      const r = await sendFrame(blob, "live");
-      drawBoxes(r, v);
+      await sendFrame(blob, "live");
     } catch (e) {
-      $("#cam-msg").textContent = e.message;
-      if (e.status === 503 || e.status === 409) return stopCamera();
+      if (e.code === "loading") { $("#cam-msg").textContent = e.message; delay = 2000; pollHealth(); }
+      else if (e.status === 409) { /* order sealed meanwhile */ }
+      else { $("#cam-msg").textContent = e.message; delay = 3000; }
     }
   }
-  setTimeout(liveLoop, 500);
+  setTimeout(liveLoop, delay);
 }
 
 $("#upload").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   e.target.value = "";
   if (!file) return;
-  stopCamera();
+  if (!readyToCheck()) { $("#cam-msg").textContent = "Pick an order first"; return; }
+  state.photoMode = true;
   const img = $("#photo");
   img.src = URL.createObjectURL(file);
   await img.decode().catch(() => {});
   $("#video").classList.add("hidden");
   img.classList.remove("hidden");
-  $("#stage-empty").classList.add("hidden");
+  $("#cam-toggle").textContent = "Back to live";
   try {
-    const r = await sendFrame(file, "photo");
-    drawBoxes(r, img);
+    await sendFrame(file, "photo");
   } catch (err) {
     $("#cam-msg").textContent = err.message;
   }
 });
 
 async function sendFrame(blob, mode) {
+  const id = state.current.id;
   const form = new FormData();
   form.append("frame", blob, "frame.jpg");
   form.append("mode", mode);
-  const r = await staffApi(`/api/orders/${state.current.id}/frame`, { method: "POST", form });
-  $("#cam-msg").textContent = `frame sha256 ${r.frame_sha256.slice(0, 12)}… · ${r.boxes.length} boxes`;
+  const r = await authed(`/api/orders/${id}/frame`, { method: "POST", form });
+  if (!state.current || state.current.id !== id) return; // switched orders mid-request
+  state.lastResult = r;
+  $("#cam-msg").textContent = `${r.boxes.length} objects · frame ${r.frame_sha256.slice(0, 10)}…`;
+  drawBoxes();
   renderChecklist(r.items);
+  if ($("#stage-msg").textContent) updateStageMsg();
   refreshLog();
-  return r;
 }
 
-function drawBoxes(result, media) {
+function clearOverlay() {
+  state.lastResult = null;
   const c = $("#overlay");
-  c.width = media.clientWidth;
-  c.height = media.clientHeight;
-  const ctx = c.getContext("2d");
-  ctx.clearRect(0, 0, c.width, c.height);
-  const sx = c.width / result.width;
-  const sy = c.height / result.height;
-  ctx.lineWidth = 3;
-  ctx.font = "bold 14px system-ui";
-  for (const b of result.boxes) {
-    const [x1, y1, x2, y2] = b.box;
-    const strong = b.conf >= 0.35;
-    ctx.strokeStyle = ctx.fillStyle = strong ? "#2ecc71" : "#f39c12";
-    ctx.strokeRect(x1 * sx, y1 * sy, (x2 - x1) * sx, (y2 - y1) * sy);
-    const text = `${b.label} ${Math.round(b.conf * 100)}%`;
-    const w = ctx.measureText(text).width + 8;
-    ctx.fillRect(x1 * sx, Math.max(0, y1 * sy - 20), w, 20);
-    ctx.fillStyle = "#000";
-    ctx.fillText(text, x1 * sx + 4, Math.max(14, y1 * sy - 5));
-  }
+  c.getContext("2d").clearRect(0, 0, c.width, c.height);
+  $("#banner").classList.add("hidden");
+  $("#cam-msg").textContent = "";
 }
 
-// ---------- audit log ----------
+function drawBoxes() {
+  const r = state.lastResult;
+  const c = $("#overlay");
+  const dpr = window.devicePixelRatio || 1;
+  const cw = c.clientWidth, ch = c.clientHeight;
+  c.width = cw * dpr;
+  c.height = ch * dpr;
+  const ctx = c.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cw, ch);
+  if (!r) return;
+  // Media is drawn with object-fit: contain; find where it actually sits.
+  const media = state.photoMode ? $("#photo") : $("#video");
+  const nw = media.videoWidth || media.naturalWidth || r.width;
+  const nh = media.videoHeight || media.naturalHeight || r.height;
+  const s = Math.min(cw / nw, ch / nh);
+  const ox = (cw - nw * s) / 2, oy = (ch - nh * s) / 2;
+  const k = (nw / r.width) * s;
+  const accept = (r.thresholds && r.thresholds.accept) || 0.25;
+  ctx.lineWidth = 3;
+  ctx.font = "bold 15px system-ui";
+  for (const b of r.boxes) {
+    const [x1, y1, x2, y2] = b.box.map((v, i) => (i % 2 ? oy : ox) + v * k);
+    const strong = b.conf >= accept;
+    const color = strong ? "#2ecc71" : "#f5a623";
+    ctx.strokeStyle = color;
+    ctx.setLineDash(strong ? [] : [6, 4]);
+    ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+    const text = `${b.label} ${Math.round(b.conf * 100)}%`;
+    const w = ctx.measureText(text).width + 10;
+    const ty = Math.max(0, y1 - 22);
+    ctx.fillStyle = color;
+    ctx.fillRect(x1, ty, w, 22);
+    ctx.fillStyle = "#000";
+    ctx.fillText(text, x1 + 5, ty + 16);
+  }
+  ctx.setLineDash([]);
+}
+window.addEventListener("resize", drawBoxes);
+
+// ---------------- audit log ----------------
+
+$("#open-log").addEventListener("click", () => { $("#log-drawer").classList.remove("hidden"); refreshLog(true); });
+$("#close-log").addEventListener("click", () => $("#log-drawer").classList.add("hidden"));
 
 let logTimer = null;
-function refreshLog() {
+function refreshLog(now = false) {
+  if ($("#log-drawer").classList.contains("hidden") && !now) return;
   clearTimeout(logTimer);
   logTimer = setTimeout(async () => {
-    if (!state.staffToken) return;
-    const r = await staffApi("/api/log").catch(() => null);
+    const r = await authed("/api/log").catch(() => null);
     if (!r) return;
     const chain = $("#chain");
     chain.textContent = r.valid ? `Hash chain intact · ${r.count} events` : `CHAIN BROKEN at #${r.broken_at}`;
@@ -395,54 +605,39 @@ function refreshLog() {
         el("span", { textContent: `#${ev.seq} ${t} ${ev.type} by ${ev.actor} ${JSON.stringify(ev.data)} ` }),
         el("span", { className: "hash", textContent: `hash ${ev.hash.slice(0, 10)}… prev ${ev.prev.slice(0, 10)}…` }));
     }));
-  }, 250);
+  }, now ? 0 : 300);
 }
 
-// ---------- Dasher phone ----------
+// ---------------- Dasher view ----------------
 
-$("#dasher-login-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const f = new FormData(e.target);
-  try {
-    const s = await api("/api/auth/login", { method: "POST", json: { user_id: f.get("user_id"), pin: f.get("pin") } });
-    if (s.role !== "dasher") throw new Error("Not a Dasher account");
-    state.dasherToken = s.token;
-    $("#dasher-name").textContent = s.user_id;
-    $("#dasher-login").classList.add("hidden");
-    $("#dasher-app").classList.remove("hidden");
-    $("#dasher-login-error").textContent = "";
-    $("#scan-result").textContent = "";
-    $("#scan-result").className = "scan-result";
-    e.target.reset();
-  } catch (err) {
-    $("#dasher-login-error").textContent = err.message;
-  }
-  refreshLog();
-});
+function enterDasher() {
+  show("#view-dasher");
+  $("#dasher-name").textContent = state.session.user_id;
+  $("#scan-result").textContent = "";
+  $("#scan-result").className = "sim-result";
+}
 
-$("#dasher-logout").addEventListener("click", () => {
-  state.dasherToken = null;
-  $("#dasher-app").classList.add("hidden");
-  $("#dasher-login").classList.remove("hidden");
+$("#paste-token").addEventListener("click", async () => {
+  try { $("#scan-token").value = await navigator.clipboard.readText(); } catch { /* permission denied */ }
 });
 
 $("#scan").addEventListener("click", async () => {
   const out = $("#scan-result");
   try {
-    const r = await api("/api/pickup", { method: "POST", token: state.dasherToken, json: { token: $("#scan-token").value.trim() } });
-    out.textContent = `✓ Picked up order #${r.order_id} for ${r.display_name} (${r.item_count} items)`;
-    out.className = "scan-result ok";
-    if (state.current && state.current.id === r.order_id) {
-      state.current.status = "picked_up";
-      $("#qr-box").classList.add("hidden");
-      renderOrder();
-    }
+    const r = await authed("/api/pickup", { method: "POST", json: { token: $("#scan-token").value.trim() } });
+    out.textContent = `✓ Picked up order #${r.order_id} (${r.ref}) for ${r.display_name}, ${r.item_count} items`;
+    out.className = "sim-result ok";
   } catch (e) {
     out.textContent = `✗ ${e.message}`;
-    out.className = "scan-result bad";
+    out.className = "sim-result bad";
   }
-  refreshLog();
-  if (state.staffToken) refreshQueue();
 });
 
-loadHealth().catch(() => {});
+// ---------------- boot ----------------
+
+(function restore() {
+  let s = null;
+  try { s = JSON.parse(sessionStorage.getItem("dcl-session") || "null"); } catch {}
+  if (s && s.token) startSession(s);
+  else show("#view-login");
+})();
