@@ -77,6 +77,8 @@ CSP `default-src 'self'` (no inline script, no third-party origins), `frame-ance
 
 Session tokens are kept in `sessionStorage` so a page refresh doesn't sign staff out mid-rush. Trade-off: unlike in-memory storage, script running on the page could read it. The strict CSP and no-`innerHTML` rule are what mitigate that. `sessionStorage` is per tab and cleared when the tab closes, which is narrower than `localStorage`. Production would use an `HttpOnly; Secure; SameSite=Strict` cookie instead.
 
+The sign-in page remembers the last **user ID** in `localStorage` for convenience, never the PIN. Failed sign-ins say how many tries are left before the 1-minute lockout. The message is identical for unknown and known IDs, so it can't be used to find valid IDs. The one-click demo buttons fill in public demo PINs (also listed in the README); production would remove them.
+
 The simulated Dasher scan on the staff screen signs the Dasher in with **their own** ID and PIN; it never reuses the staff session.
 
 ## Known prototype gaps (not production-ready)

@@ -66,23 +66,83 @@ input::placeholder, textarea::placeholder { color: #a19d97; }
 .pill.bad { background: #f3d9d3; color: var(--bad); }
 
 /* ================= login ================= */
-.login-view { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
-.login-card { width: 100%; max-width: 480px; background: var(--bg); border-radius: 36px; padding: 38px; box-shadow: var(--raise); }
+.login-view { min-height: 100vh; display: grid; place-items: center; align-content: center; gap: 16px; padding: 24px; }
+.login-card { width: 100%; max-width: 1040px; display: grid; grid-template-columns: 1.1fr 1fr; gap: 0;
+  background: var(--bg); border-radius: 40px; box-shadow: var(--raise); overflow: hidden; }
+.login-pitch { padding: 44px 42px; display: flex; flex-direction: column; gap: 14px; }
+.login-form-side { padding: 44px 40px; display: flex; flex-direction: column; gap: 16px; background: var(--surface);
+  box-shadow: inset 8px 0 18px -10px var(--lo); }
 .welcome { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
-.login-sub { color: var(--muted); margin: 8px 0 18px; }
-.steps { margin: 0 0 18px; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 10px; }
-.steps li { counter-increment: s; display: grid; grid-template-columns: 30px 1fr; gap: 12px; align-items: start;
-  background: var(--surface); border-radius: 18px; padding: 12px 14px; box-shadow: var(--raise-sm); }
-.steps li::before { content: counter(s); width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff;
-  font-weight: 800; display: grid; place-items: center; font-size: 13px; box-shadow: 3px 3px 8px rgba(147, 54, 41, .35); }
-#login-form { display: grid; gap: 14px; margin-top: 6px; }
-#login-form label { display: grid; gap: 8px; font-weight: 650; }
-#login-form .btn { padding: 14px; font-size: 15px; border-radius: 18px; }
-.demo-accounts { margin-top: 16px; color: var(--muted); }
-.demo-accounts summary { cursor: pointer; }
-.demo-accounts table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
-.demo-accounts td, .demo-accounts th { text-align: left; padding: 6px; border-bottom: 1px solid var(--line); }
-.fineprint { font-size: 11px; color: var(--muted); margin-top: 18px; }
+.login-headline { margin: 4px 0 0; font-family: var(--display); font-size: 38px; line-height: 1.08; font-weight: 650; letter-spacing: -.045em; }
+.login-sub { color: var(--muted); margin: 0; }
+
+/* live preview of a check */
+.preview { position: relative; margin: 10px 0 4px; padding: 26px 0 8px; }
+.preview-card { display: grid; grid-template-columns: 72px 1fr auto; gap: 16px; align-items: center; padding: 16px 20px;
+  border-radius: 26px; background: var(--card-warm); box-shadow: var(--raise), inset 2px 2px 0 rgba(255, 255, 255, .7); transition: background .4s; }
+.preview-card.ok { background: var(--ok-bg); }
+.pv-icon { width: 72px; height: 72px; display: grid; place-items: center; animation: float 2.6s ease-in-out infinite;
+  filter: drop-shadow(0 6px 6px rgba(0, 0, 0, .2)); }
+.pv-icon svg { width: 100%; height: 100%; }
+.pv-text { display: grid; }
+.pv-text strong { font-family: var(--display); font-size: 18px; letter-spacing: -.02em; }
+.pv-count { font-family: var(--display); font-size: 30px; font-weight: 600; letter-spacing: -.04em; color: var(--accent); line-height: 1.1; }
+.preview-card.ok .pv-count { color: var(--ok); }
+.pv-badge { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800;
+  background: #9a4a3e; box-shadow: 2px 3px 6px rgba(0, 0, 0, .25); }
+.preview-card.ok .pv-badge { background: var(--ok); animation: pop .5s cubic-bezier(.3, 1.6, .5, 1); }
+.pv-toast { position: absolute; top: 0; right: 16px; padding: 7px 16px; border-radius: 999px; background: var(--surface);
+  font-family: var(--display); font-weight: 700; font-size: 14px; letter-spacing: -.01em;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .15), inset 0 0 0 2px var(--accent); opacity: 0; transform: translateY(6px) scale(.9);
+  transition: opacity .3s, transform .4s cubic-bezier(.3, 1.6, .5, 1); }
+.pv-toast.show { opacity: 1; transform: none; }
+
+.flow { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.flow li { display: grid; justify-items: center; gap: 6px; padding: 12px 6px; border-radius: 18px; background: var(--surface);
+  box-shadow: var(--raise-sm); font-size: 12px; font-weight: 650; text-align: center; }
+.flow-ico { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-size: 18px;
+  background: var(--surface-2); box-shadow: var(--inset); }
+
+/* form side */
+.role-toggle { display: grid; grid-template-columns: 1fr 1fr; padding: 5px; border-radius: 999px; background: var(--surface-2); box-shadow: var(--inset); }
+.role-toggle button { border: 0; background: none; font: inherit; font-weight: 650; font-size: 13px; color: var(--muted);
+  padding: 10px 0; border-radius: 999px; cursor: pointer; transition: background .2s, color .2s; }
+.role-toggle button.on { background: var(--accent); color: #fff; box-shadow: 3px 3px 8px rgba(147, 54, 41, .35), -2px -2px 6px var(--hi); }
+#login-form { display: grid; gap: 14px; }
+#login-form label { display: grid; gap: 8px; font-weight: 650; font-size: 13px; }
+#login-form .btn { padding: 15px; font-size: 15px; border-radius: 20px; margin-top: 4px; }
+.pin-wrap { position: relative; display: block; }
+.pin-wrap input { padding-right: 72px; letter-spacing: .3em; }
+.pin-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; font: inherit; font-size: 12px; font-weight: 650;
+  color: var(--muted); background: var(--surface); padding: 6px 12px; border-radius: 999px; cursor: pointer; box-shadow: var(--raise-sm); }
+.login-msg { margin: 0; min-height: 0; font-size: 13px; font-weight: 600; border-radius: 14px; }
+.login-msg:empty { display: none; }
+.login-msg.error { color: var(--accent-dark); background: #f3d9d3; padding: 10px 14px; box-shadow: var(--inset); }
+.login-msg.warn, .login-msg.notice { color: #6d5414; background: var(--warn-bg); padding: 10px 14px; box-shadow: var(--inset); }
+
+.quick { display: grid; gap: 8px; }
+.quick .label { margin: 0; }
+.quick-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.quick-btn { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 0; border-radius: 18px; cursor: pointer;
+  background: var(--bg); color: var(--ink); font: inherit; text-align: left; box-shadow: var(--raise-sm); transition: transform .15s, box-shadow .15s; }
+.quick-btn:hover { transform: translateY(-2px); }
+.quick-btn:active { box-shadow: var(--inset); transform: none; }
+.quick-btn .q-ico { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 17px;
+  background: var(--surface-2); box-shadow: var(--inset); flex: none; }
+.quick-btn strong { display: block; font-size: 13px; }
+.quick-btn small { color: var(--muted); font-size: 11px; }
+
+.sec-badges { list-style: none; margin: auto 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.sec-badges li { font-size: 11.5px; font-weight: 600; color: var(--muted); padding: 6px 11px; border-radius: 999px;
+  background: var(--surface-2); box-shadow: var(--inset); }
+.fineprint { font-size: 11px; color: var(--muted); margin: 0; text-align: center; }
+
+@media (max-width: 880px) {
+  .login-card { grid-template-columns: 1fr; }
+  .login-pitch, .login-form-side { padding: 30px 24px; }
+  .login-form-side { box-shadow: inset 0 8px 18px -10px var(--lo); }
+  .login-headline { font-size: 30px; }
+}
 
 /* ================= station ================= */
 .station { position: fixed; inset: 0; padding: 22px; }
@@ -421,7 +481,7 @@ select.glass-pill option { background: var(--surface); color: var(--ink); }
   .done-grid { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .food-icon, .food-icon.just-ok, .food-icon.just-ok::after, .float-shadow, .badge.ok, .live-dot { animation: none; }
+  .food-icon, .food-icon.just-ok, .food-icon.just-ok::after, .float-shadow, .badge.ok, .live-dot, .pv-icon { animation: none; }
   .toast { animation: toast-out .3s ease-in 2.2s forwards; }
   .seal-check path { animation: none; stroke-dashoffset: 0; }
 }

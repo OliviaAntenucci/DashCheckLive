@@ -61,18 +61,124 @@ function money(n) { return `$${n.toFixed(2)}`; }
 
 // ---------------- sign in / out ----------------
 
+// Demo accounts (PINs are public demo values, also listed in the README).
+const DEMO_ACCOUNTS = [
+  { id: "staff-olivia", pin: "4242", role: "staff", name: "Olivia", icon: "🧑‍🍳" },
+  { id: "staff-jordan", pin: "1357", role: "staff", name: "Jordan", icon: "🧑‍🍳" },
+  { id: "dasher-ava", pin: "1111", role: "dasher", name: "Ava", icon: "🛵" },
+  { id: "dasher-ben", pin: "2222", role: "dasher", name: "Ben", icon: "🛵" },
+  { id: "dasher-cy", pin: "3333", role: "dasher", name: "Cy", icon: "🛵" },
+  { id: "dasher-dee", pin: "4444", role: "dasher", name: "Dee", icon: "🛵" },
+];
+const ROLE_HELP = {
+  staff: ["Check and seal orders at your packing station.", "staff-olivia"],
+  dasher: ["Confirm a pickup with the code from the counter.", "dasher-ava"],
+};
+let loginRole = "staff";
+
+function setLoginRole(role) {
+  loginRole = role;
+  for (const b of document.querySelectorAll(".role-toggle button")) {
+    const on = b.dataset.role === role;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-selected", String(on));
+  }
+  $("#role-help").textContent = ROLE_HELP[role][0];
+  $("#login-id").placeholder = ROLE_HELP[role][1];
+  $("#quick-accounts").replaceChildren(...DEMO_ACCOUNTS.filter((a) => a.role === role).map((a) => {
+    const b = el("button", { type: "button", className: "quick-btn" },
+      el("span", { className: "q-ico", textContent: a.icon }),
+      el("span", {}, el("strong", { textContent: a.name }), el("small", { textContent: a.id })));
+    b.addEventListener("click", () => {
+      $("#login-id").value = a.id;
+      $("#login-pin").value = a.pin;
+      $("#login-form").requestSubmit();
+    });
+    return b;
+  }));
+}
+for (const b of document.querySelectorAll(".role-toggle button")) b.addEventListener("click", () => setLoginRole(b.dataset.role));
+
+// Typing an ID switches the toggle to match.
+$("#login-id").addEventListener("input", (e) => {
+  const v = e.target.value.trim().toLowerCase();
+  if (v.startsWith("dasher") && loginRole !== "dasher") setLoginRole("dasher");
+  else if (v.startsWith("staff") && loginRole !== "staff") setLoginRole("staff");
+});
+
+$("#pin-eye").addEventListener("click", () => {
+  const pin = $("#login-pin");
+  const show = pin.type === "password";
+  pin.type = show ? "text" : "password";
+  $("#pin-eye").textContent = show ? "Hide" : "Show";
+  $("#pin-eye").setAttribute("aria-label", show ? "Hide PIN" : "Show PIN");
+});
+
+function loginMessage(text, kind = "error") {
+  const m = $("#login-error");
+  m.textContent = text;
+  m.className = `login-msg ${text ? kind : ""}`;
+}
+
 $("#login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const f = new FormData(e.target);
-  $("#login-error").textContent = "";
+  const btn = $("#login-btn");
+  if (btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = "Signing in…";
+  loginMessage("");
   try {
-    const s = await api("/api/auth/login", { method: "POST", json: { user_id: f.get("user_id").trim(), pin: f.get("pin") } });
+    const userId = f.get("user_id").trim();
+    const s = await api("/api/auth/login", { method: "POST", json: { user_id: userId, pin: f.get("pin") } });
+    // Remember the ID (never the PIN) on this device for next time.
+    try { localStorage.setItem("dcl-last-id", userId); } catch {}
     e.target.reset();
+    $("#login-pin").type = "password";
+    $("#pin-eye").textContent = "Show";
     startSession(s);
   } catch (err) {
-    $("#login-error").textContent = err.message;
+    loginMessage(err.message, err.status === 429 ? "warn" : "error");
+    $("#login-pin").select();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Sign in";
   }
 });
+
+// Small looping preview on the sign-in page: an item goes 0/1 → detected → ✓.
+const PREVIEW_ITEMS = ["bottle", "salad", "energy drink", "fork", "tofu", "spoon"];
+let previewIdx = 0;
+function runPreview() {
+  if ($("#view-login").classList.contains("hidden")) return setTimeout(runPreview, 1500);
+  const label = PREVIEW_ITEMS[previewIdx++ % PREVIEW_ITEMS.length];
+  const name = label.charAt(0).toUpperCase() + label.slice(1);
+  const card = $(".preview-card");
+  $("#pv-icon").replaceChildren(KAWAII(label) || "🍽️");
+  $("#pv-name").textContent = name;
+  $("#pv-count").textContent = "0/1";
+  $("#pv-badge").textContent = "✗";
+  card.classList.remove("ok");
+  $("#pv-toast").classList.remove("show");
+  setTimeout(() => {
+    $("#pv-toast").textContent = `${name} detected!`;
+    $("#pv-toast").classList.add("show");
+    $("#pv-count").textContent = "1/1";
+    $("#pv-badge").textContent = "✓";
+    card.classList.add("ok");
+  }, 1400);
+  setTimeout(runPreview, 3600);
+}
+
+function showLogin(message = "", kind = "error") {
+  show("#view-login");
+  let last = "";
+  try { last = localStorage.getItem("dcl-last-id") || ""; } catch {}
+  setLoginRole(last.startsWith("dasher") ? "dasher" : "staff");
+  $("#login-id").value = last;
+  loginMessage(message, kind);
+  (last ? $("#login-pin") : $("#login-id")).focus();
+}
 
 function startSession(s) {
   state.session = s;
@@ -90,8 +196,7 @@ function signOut(message = "") {
   $("#log-drawer").classList.add("hidden");
   $("#next-pop").classList.add("hidden");
   if (location.hash) history.replaceState(null, "", location.pathname);
-  $("#login-error").textContent = message;
-  show("#view-login");
+  showLogin(message, message.startsWith("Session expired") ? "notice" : "error");
 }
 $("#logout").addEventListener("click", () => signOut());
 $("#dasher-logout").addEventListener("click", () => signOut());
@@ -949,6 +1054,8 @@ $("#scan").addEventListener("click", async () => {
   if (location.hash) history.replaceState(null, "", location.pathname);
   let s = null;
   try { s = JSON.parse(sessionStorage.getItem("dcl-session") || "null"); } catch {}
+  setLoginRole("staff");
   if (s && s.token) startSession(s);
-  else show("#view-login");
+  else showLogin();
+  runPreview();
 })();

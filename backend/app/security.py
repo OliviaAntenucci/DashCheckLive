@@ -94,14 +94,17 @@ def login(user_id: str, pin: str) -> dict:
     now = time.time()
     recent = [t for t in _failures.get(user_id, []) if now - t < LOCKOUT_SECONDS]
     if len(recent) >= MAX_FAILURES:
-        raise HTTPException(429, "Too many attempts. Try again in a minute.")
+        raise HTTPException(429, "Too many tries. This ID is locked for a minute, then you can try again.")
     user = USERS.get(user_id)
     # Hash even for unknown users so response time doesn't reveal which IDs exist.
     salt = user["salt"] if user else b"\0" * 16
     ok = hmac.compare_digest(_hash_pin(pin, salt), user["pin_hash"] if user else b"")
     if not (user and ok):
         _failures[user_id] = recent + [now]
-        raise HTTPException(401, "Invalid ID or PIN")
+        left = MAX_FAILURES - len(_failures[user_id])
+        # Same message whether the ID exists or not, so it can't be used to discover IDs.
+        raise HTTPException(401, f"That ID and PIN don't match. {left} tr{'y' if left == 1 else 'ies'} left before a 1-minute lock."
+                            if left > 0 else "That ID and PIN don't match. This ID is now locked for a minute.")
     _failures.pop(user_id, None)
     token = sign({"sub": user_id, "role": user["role"]}, "session", SESSION_TTL_SECONDS)
     return {"token": token, "user_id": user_id, "role": user["role"]}

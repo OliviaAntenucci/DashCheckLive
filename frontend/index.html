@@ -11,36 +11,66 @@
   <!-- ============ Sign-in page ============ -->
   <section id="view-login" class="view login-view">
     <div class="login-card">
-      <p class="welcome">Welcome to</p>
-      <div class="brand big">DashCheck<span>Live</span></div>
-      <p class="login-sub">Make sure every order is complete before it leaves your restaurant. The camera checks the items against the order, so fewer meals go out missing something.</p>
-      <ol class="steps">
-        <li><span><strong>Sign in</strong> with your staff ID and PIN.</span></li>
-        <li><span><strong>Pick an order</strong> and lay its items in front of the camera. Each item is checked off as it's counted.</span></li>
-        <li><span><strong>Finalize the order</strong>: tick “I'm done” and seal it.</span></li>
-        <li><span><strong>Hand it off.</strong> The Dasher scans the pickup code and takes the order.</span></li>
-      </ol>
-      <p class="login-sub small">Dashers: sign in with your Dasher ID to confirm a pickup.</p>
-      <form id="login-form" autocomplete="off">
-        <label>User ID<input name="user_id" autocomplete="username" placeholder="staff-olivia" required></label>
-        <label>PIN<input name="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="••••" required></label>
-        <button type="submit" class="btn primary wide">Sign in</button>
-      </form>
-      <p id="login-error" class="error"></p>
-      <details class="demo-accounts">
-        <summary>Demo accounts</summary>
-        <table>
-          <tr><th>ID</th><th>PIN</th><th>Opens</th></tr>
-          <tr><td>staff-olivia</td><td>4242</td><td>Packing station</td></tr>
-          <tr><td>staff-jordan</td><td>1357</td><td>Packing station</td></tr>
-          <tr><td>dasher-ava</td><td>1111</td><td>Dasher pickup</td></tr>
-          <tr><td>dasher-ben</td><td>2222</td><td>Dasher pickup</td></tr>
-          <tr><td>dasher-cy</td><td>3333</td><td>Dasher pickup</td></tr>
-          <tr><td>dasher-dee</td><td>4444</td><td>Dasher pickup</td></tr>
-        </table>
-      </details>
-      <p class="fineprint">Prototype. Orders are fictional sample data, not real DoorDash orders.</p>
+      <!-- Left: the pitch, with a live preview of a check -->
+      <div class="login-pitch">
+        <p class="welcome">Your packing station</p>
+        <div class="brand big">DashCheck<span>Live</span></div>
+        <h1 class="login-headline">A good order starts with a good check.</h1>
+        <p class="login-sub">The camera checks every item against the order before it leaves your restaurant, so fewer meals go out missing something.</p>
+
+        <div class="preview" aria-hidden="true">
+          <div class="preview-card">
+            <span id="pv-icon" class="pv-icon"></span>
+            <div class="pv-text">
+              <strong id="pv-name">Bottle</strong>
+              <span id="pv-count" class="pv-count">0/1</span>
+            </div>
+            <span id="pv-badge" class="pv-badge">✗</span>
+          </div>
+          <div id="pv-toast" class="pv-toast">Bottle detected!</div>
+        </div>
+
+        <ol class="flow">
+          <li><span class="flow-ico">🛍️</span>Pick order</li>
+          <li><span class="flow-ico">📷</span>Check items</li>
+          <li><span class="flow-ico">✓</span>Seal</li>
+          <li><span class="flow-ico">🛵</span>Hand off</li>
+        </ol>
+      </div>
+
+      <!-- Right: sign in -->
+      <div class="login-form-side">
+        <div class="role-toggle" role="tablist" aria-label="Sign in as">
+          <button type="button" class="on" data-role="staff" role="tab" aria-selected="true">Restaurant staff</button>
+          <button type="button" data-role="dasher" role="tab" aria-selected="false">Dasher</button>
+        </div>
+        <p id="role-help" class="login-sub small">Check and seal orders at your packing station.</p>
+
+        <form id="login-form" autocomplete="off">
+          <label>User ID<input id="login-id" name="user_id" autocomplete="username" placeholder="staff-olivia" required></label>
+          <label>PIN
+            <span class="pin-wrap">
+              <input id="login-pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="••••" maxlength="12" required>
+              <button type="button" id="pin-eye" class="pin-eye" aria-label="Show PIN">Show</button>
+            </span>
+          </label>
+          <button id="login-btn" type="submit" class="btn primary wide">Sign in</button>
+        </form>
+        <p id="login-error" class="login-msg"></p>
+
+        <div class="quick">
+          <p class="label">Demo: one-click sign in</p>
+          <div id="quick-accounts" class="quick-grid"></div>
+        </div>
+
+        <ul class="sec-badges">
+          <li>🔒 Hashed PINs</li>
+          <li>⏱ Lockout after 5 tries</li>
+          <li>🧾 Every action logged</li>
+        </ul>
+      </div>
     </div>
+    <p class="fineprint">Prototype. Orders are fictional sample data, not real DoorDash orders.</p>
   </section>
 
   <!-- ============ Packing station (restaurant staff) ============ -->
