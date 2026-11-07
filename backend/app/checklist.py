@@ -13,21 +13,32 @@ class Smoother:
     blinks. Raise SMOOTH_MIN_HITS to trade sensitivity for fewer false counts.
     """
 
-    def __init__(self, window: int = config.SMOOTH_WINDOW, min_hits: int = config.SMOOTH_MIN_HITS) -> None:
+    def __init__(self, window: int = config.SMOOTH_WINDOW, min_hits: int = config.SMOOTH_MIN_HITS,
+                 sticky: bool = config.STICKY_COUNTS) -> None:
         self.frames: deque[Counter] = deque(maxlen=window)
         self.min_hits = min_hits
+        self.sticky = sticky
+        self.peak: dict[str, int] = {}
 
     def reset(self) -> None:
         self.frames.clear()
+        self.peak.clear()
 
     def push(self, counts: Counter) -> dict[str, int]:
         self.frames.append(counts)
         k = min(self.min_hits, len(self.frames))
         labels = set().union(*self.frames)
-        return {
+        current = {
             label: sorted((f.get(label, 0) for f in self.frames), reverse=True)[k - 1]
             for label in labels
         }
+        if not self.sticky:
+            return current
+        # Sticky: once counted, a number never goes down for this order (items get
+        # moved, covered by hands, or the model blinks). Staff can "Reset counts".
+        for label, n in current.items():
+            self.peak[label] = max(self.peak.get(label, 0), n)
+        return dict(self.peak)
 
 
 def compare(

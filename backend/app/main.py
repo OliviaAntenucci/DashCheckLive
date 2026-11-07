@@ -183,8 +183,6 @@ async def check_frame(
     else:
         accepted = Counter(b["label"] for b in result["boxes"] if b["conf"] >= config.CONF_ACCEPT)
         review = {b["label"] for b in result["boxes"] if b["conf"] < config.CONF_ACCEPT}
-    if mode == "photo":
-        order.smoother.reset()
     smoothed = order.smoother.push(accepted)
     items, all_ok = compare(order.expected, order.excluded, smoothed, review, order.sources)
     # Flag rows whose count rests only on low-confidence boxes, so staff can glance at them.
@@ -193,7 +191,8 @@ async def check_frame(
     else:
         confident = {b["label"] for b in result["boxes"] if b["conf"] >= config.CONF_CONFIDENT}
     for item in items:
-        item["low_conf"] = item["detected"] > 0 and item["label"] not in confident
+        # Only flag what's in this frame; sticky counts from earlier frames aren't re-flagged.
+        item["low_conf"] = item["label"] in accepted and item["label"] not in confident
     order.last_check = {
         "frame_sha256": frame_hash, "source": "photo" if mode == "photo" else "live",
         "ts": time.time(), "items": items, "all_ok": all_ok,
@@ -211,6 +210,19 @@ async def check_frame(
         )
     return {**result, "items": items, "all_ok": all_ok, "frame_sha256": frame_hash,
             "thresholds": {"accept": config.CONF_ACCEPT, "confident": config.CONF_CONFIDENT}}
+
+
+@app.post("/api/orders/{order_id}/recount")
+def recount(order_id: str, session: dict = Depends(staff_only)):
+    """Clear sticky counts so the camera starts counting this order from zero."""
+    order = _order(order_id)
+    if order.status != "prepared":
+        raise HTTPException(409, f"Order is {order.status}, cannot recount")
+    order.smoother.reset()
+    order.last_check = None
+    order.last_logged_summary = None
+    ledger.append("counts_reset", session["sub"], order_id=order.id)
+    return get_order(order_id, session)
 
 
 class SealRequest(BaseModel):

@@ -40,6 +40,8 @@ CONF_CONFIDENT = float(os.getenv("CONF_CONFIDENT", "0.25"))  # display only
 SMOOTH_WINDOW = int(os.getenv("SMOOTH_WINDOW", "2" if VISION_BACKEND == "openrouter" else "3"))
 # Frames out of the last SMOOTH_WINDOW a count must appear in. 1 = any single detection counts.
 SMOOTH_MIN_HITS = int(os.getenv("SMOOTH_MIN_HITS", "1"))
+# Counts only go up per order (until staff press "Reset counts").
+STICKY_COUNTS = os.getenv("STICKY_COUNTS", "true").lower() == "true"
 MAX_FRAME_BYTES = 5 * 1024 * 1024
 ALLOWED_FRAME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 

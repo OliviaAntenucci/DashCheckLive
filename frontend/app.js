@@ -241,6 +241,7 @@ function renderSide() {
   } else prep.classList.add("hidden");
 
   $("#seal-box").classList.toggle("hidden", !o || o.status !== "prepared");
+  $("#recount").classList.toggle("hidden", !o || o.status !== "prepared");
   $("#confirm").checked = false;
   $("#seal-error").textContent = "";
 
@@ -365,6 +366,20 @@ $("#seal").addEventListener("click", async () => {
     renderSide();
     openQrModal(r);
     refreshQueue();
+    refreshLog();
+  } catch (e) {
+    $("#seal-error").textContent = e.message;
+  }
+});
+
+$("#recount").addEventListener("click", async () => {
+  const o = state.current;
+  if (!o || o.status !== "prepared") return;
+  try {
+    state.current = await authed(`/api/orders/${o.id}/recount`, { method: "POST" });
+    state.checklistKey = "";
+    clearOverlay();
+    renderSide();
     refreshLog();
   } catch (e) {
     $("#seal-error").textContent = e.message;

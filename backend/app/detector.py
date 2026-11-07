@@ -50,7 +50,23 @@ def merge_boxes(boxes: list[dict], width: int, height: int) -> list[dict]:
         if any(_iou(b["box"], k["box"]) > (0.5 if k["label"] == b["label"] else 0.8) for k in kept):
             continue
         kept.append(b)
-    return kept
+    # A box mostly inside a bigger box of the same label is a piece of it
+    # (tofu cubes inside the tofu dish), not a second item.
+    return [b for b in kept if not any(
+        k is not b and k["label"] == b["label"] and _area(k["box"]) > _area(b["box"])
+        and _inside(b["box"], k["box"]) > 0.7 for k in kept)]
+
+
+def _area(box: list[float]) -> float:
+    return max(0.0, box[2] - box[0]) * max(0.0, box[3] - box[1])
+
+
+def _inside(small: list[float], big: list[float]) -> float:
+    """Fraction of `small` that lies within `big`."""
+    ix = max(0.0, min(small[2], big[2]) - max(small[0], big[0]))
+    iy = max(0.0, min(small[3], big[3]) - max(small[1], big[1]))
+    area = _area(small)
+    return ix * iy / area if area else 0.0
 
 
 class Detector:

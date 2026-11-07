@@ -8,10 +8,19 @@ Each checklist label maps to:
            detected much more reliably and act as a second opinion.
 """
 
-VISION_LABELS: dict[str, dict[str, list[str]]] = {
+VISION_LABELS: dict[str, dict] = {
     "bottle": {"prompts": ["bottle", "soda bottle", "plastic bottle", "water bottle", "glass bottle"],
                "coco": ["bottle"]},
     "can": {"prompts": ["soda can", "aluminum can", "drink can", "beverage can"], "coco": []},
+    "energy drink": {"prompts": ["monster energy drink can", "energy drink can", "tall energy drink can"],
+                     "coco": []},
+    # Dishes: the whole dish/container is one item. Prompts avoid bare "tofu",
+    # which made detectors box each cube.
+    "tofu": {"prompts": ["dish of tofu", "tofu in a container", "plate of tofu", "tofu package"], "coco": [],
+             "note": "a whole dish, container or package of tofu is ONE item; never count individual tofu cubes"},
+    "salad": {"prompts": ["bowl of salad", "salad container", "salad"], "coco": ["bowl"],
+              "note": "one bowl or container of salad is ONE item; never count leaves or toppings"},
+    "knife": {"prompts": ["knife", "plastic knife", "butter knife"], "coco": ["knife"]},
     "sandwich": {"prompts": ["sandwich", "sub sandwich", "wrapped sandwich"], "coco": ["sandwich"]},
     "hot dog": {"prompts": ["hot dog", "hot dog in a bun"], "coco": ["hot dog"]},
     "pizza": {"prompts": ["pizza", "pizza slice"], "coco": ["pizza"]},
