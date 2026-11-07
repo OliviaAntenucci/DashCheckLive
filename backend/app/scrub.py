@@ -7,6 +7,9 @@ _PATTERNS = [
     ("[EMAIL]", re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")),
     ("[URL]", re.compile(r"https?://\S+", re.I)),
     ("[CARD]", re.compile(r"\b(?:\d[ -]?){13,16}\b")),
+    # Gate/door codes are physical-access secrets: the kitchen never needs them.
+    ("[ACCESS_CODE]", re.compile(
+        r"\b(?:gate|door|access|entry|lockbox|buzzer|building)\s*(?:code)?\s*(?:is|:|#)?\s*\d{3,8}\b", re.I)),
     ("[PHONE]", re.compile(r"(?:\+?1[\s.-]?)?\(?\b\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b")),
     (
         "[ADDRESS]",

@@ -81,9 +81,8 @@ USERS = {
     "dasher-ava": _user("dasher", "1111"),
     "dasher-ben": _user("dasher", "2222"),
     "dasher-cy": _user("dasher", "3333"),
+    "dasher-dee": _user("dasher", "4444"),
 }
-DEMO_PINS = {"staff-olivia": "4242", "staff-jordan": "1357",
-             "dasher-ava": "1111", "dasher-ben": "2222", "dasher-cy": "3333"}
 
 SESSION_TTL_SECONDS = 8 * 3600
 MAX_FAILURES = 5

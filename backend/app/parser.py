@@ -75,7 +75,8 @@ def parse_rules(note: str) -> dict:
     elif re.search(r"\b(forks?|utensils?|cutlery|silverware)\b", text):
         extras["fork"] = 1
     prep = [f"no {w}" for w in re.findall(r"\bno\s+([a-z]+)", text) if w not in utensil_words]
-    allergies = re.findall(r"\b([a-z]+)\s+allerg", text) + re.findall(r"allerg(?:y|ic)\s+to\s+([a-z]+)", text)
+    allergies = (re.findall(r"\b(tree nut|[a-z]+)\s+allerg", text)
+                 + re.findall(r"allerg(?:y|ic)\s+to\s+(tree nuts?|[a-z]+)", text))
     return _clean({"extras": extras, "exclude": exclude,
                    "prep_instructions": prep, "allergy_flags": allergies})
 

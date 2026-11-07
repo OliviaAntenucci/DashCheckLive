@@ -16,11 +16,16 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 PARSE_MODEL = os.getenv("PARSE_MODEL", "openai/gpt-4o-mini")
 LLM_TIMEOUT_SECONDS = 15
 
-# Local detection
-YOLO_WEIGHTS = os.getenv("YOLO_WEIGHTS", "yolov8s-worldv2.pt")
-CONF_ACCEPT = float(os.getenv("CONF_ACCEPT", "0.35"))
-CONF_REVIEW = float(os.getenv("CONF_REVIEW", "0.20"))
+# Local detection: open-vocabulary YOLO-World + COCO-trained YOLO11, merged.
+# Weights download into backend/ on first run.
+YOLO_WORLD_WEIGHTS = os.getenv("YOLO_WORLD_WEIGHTS") or os.getenv("YOLO_WEIGHTS", "yolov8s-worldv2.pt")
+COCO_WEIGHTS = os.getenv("COCO_WEIGHTS", "yolo11s.pt")
+DETECT_IMGSZ = int(os.getenv("DETECT_IMGSZ", "640"))
+# YOLO-World scores are lower than closed-set models; 0.35 dropped most real bottles.
+CONF_ACCEPT = float(os.getenv("CONF_ACCEPT", "0.25"))
+CONF_REVIEW = float(os.getenv("CONF_REVIEW", "0.10"))
 SMOOTH_WINDOW = 5
+SMOOTH_MIN_HITS = 2  # a count must appear in at least this many of the last SMOOTH_WINDOW frames
 MAX_FRAME_BYTES = 5 * 1024 * 1024
 ALLOWED_FRAME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 

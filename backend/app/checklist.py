@@ -1,24 +1,33 @@
 """Frame smoothing and expected-vs-detected comparison."""
 
 from collections import Counter, deque
-from statistics import median_low
 
 from . import config
 
 
 class Smoother:
-    """Median count per label over the last N frames, so the checklist doesn't flicker."""
+    """Per label: the highest count seen in at least `min_hits` of the last N frames.
 
-    def __init__(self, window: int = config.SMOOTH_WINDOW) -> None:
+    A plain median needed an item in 3 of 5 frames, so a bottle the detector
+    caught every other frame never registered. Requiring 2 hits still ignores
+    one-frame flickers.
+    """
+
+    def __init__(self, window: int = config.SMOOTH_WINDOW, min_hits: int = config.SMOOTH_MIN_HITS) -> None:
         self.frames: deque[Counter] = deque(maxlen=window)
+        self.min_hits = min_hits
 
     def reset(self) -> None:
         self.frames.clear()
 
     def push(self, counts: Counter) -> dict[str, int]:
         self.frames.append(counts)
+        k = min(self.min_hits, len(self.frames))
         labels = set().union(*self.frames)
-        return {label: median_low([f.get(label, 0) for f in self.frames]) for label in labels}
+        return {
+            label: sorted((f.get(label, 0) for f in self.frames), reverse=True)[k - 1]
+            for label in labels
+        }
 
 
 def compare(

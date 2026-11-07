@@ -16,6 +16,7 @@ import json
 import secrets
 import time
 from collections import Counter
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.staticfiles import StaticFiles
@@ -24,14 +25,21 @@ from starlette.concurrency import run_in_threadpool
 
 from . import config
 from .checklist import compare
-from .detector import DetectorUnavailable, detector
+from .detector import DetectorLoading, DetectorUnavailable, detector
 from .ledger import Ledger
-from .orders import MENU, OrderStore
+from .orders import OrderStore
 from .parser import parse_note
 from .scrub import scrub
 from .security import login, require_role, sign, token_fingerprint, verify
 
-app = FastAPI(title="DashCheckLive", docs_url="/api/docs", openapi_url="/api/openapi.json")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    detector.warm_up()  # load vision models in the background while staff sign in
+    yield
+
+
+app = FastAPI(title="DashCheckLive", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)
 ledger = Ledger(config.DATA_DIR / "ledger.jsonl")
 store = OrderStore()
 
@@ -91,6 +99,7 @@ def health():
         "detector": detector.status(),
         "parser": f"openrouter:{config.PARSE_MODEL}" if config.OPENROUTER_KEY else "rules (no OPENROUTER_KEY)",
         "images_leave_device": False,
+        "thresholds": {"accept": config.CONF_ACCEPT, "review": config.CONF_REVIEW},
     }
 
 
@@ -98,18 +107,21 @@ def health():
 
 @app.get("/api/orders")
 def list_orders(_: dict = Depends(staff_only)):
-    return [
-        {"id": o.id, "display_name": o.display_name, "status": o.status,
-         "item_count": sum(q for _, q in o.items), "dasher_id": o.dasher_id}
-        for o in store.orders.values()
-    ]
+    return {
+        "store": store.store["name"],
+        "orders": [
+            {"id": o.id, "ref": o.ref, "display_name": o.display_name, "status": o.status,
+             "item_count": o.item_count, "placed_at": o.placed_at, "dasher_name": o.dasher["name"]}
+            for o in store.orders.values()
+        ],
+    }
 
 
 @app.get("/api/orders/{order_id}")
 def get_order(order_id: str, _: dict = Depends(staff_only)):
     order = _order(order_id)
     items, all_ok = _checklist(order) if order.status != "new" else ([], False)
-    return {**order.public(), "checklist": items, "all_ok": all_ok}
+    return {**order.public(store.store), "checklist": items, "all_ok": all_ok}
 
 
 @app.post("/api/orders/{order_id}/prepare")
@@ -118,8 +130,9 @@ def prepare_order(order_id: str, session: dict = Depends(staff_only)):
     order = _order(order_id)
     if order.status != "new":
         raise HTTPException(409, f"Order is already {order.status}")
-    clean, redactions = scrub(order.raw_note, names=(order.customer_name,))
-    parsed, parser_used = parse_note(clean, [MENU[k]["name"] for k, _ in order.items])
+    clean, redactions = scrub(order.customer_note, names=(order.customer_name,))
+    parsed, parser_used = parse_note(clean, order.item_names())
+    parsed["prep_instructions"] = (order.receipt_prep() + parsed["prep_instructions"])[:8]
     order.scrubbed_note, order.redactions = clean, redactions
     order.apply_parsed({**parsed, "parser": parser_used})
     order.status = "prepared"
@@ -152,8 +165,10 @@ async def check_frame(
     labels = sorted(set(order.expected) | set(order.excluded))
     try:
         result = await run_in_threadpool(detector.detect, data, labels)
+    except DetectorLoading as e:
+        raise HTTPException(503, {"code": "loading", "message": str(e)})
     except DetectorUnavailable as e:
-        raise HTTPException(503, str(e))
+        raise HTTPException(503, {"code": "unavailable", "message": str(e)})
     except ValueError as e:
         raise HTTPException(400, str(e))
     finally:
@@ -179,7 +194,8 @@ async def check_frame(
             source=order.last_check["source"], all_ok=all_ok,
             statuses={i["label"]: i["status"] for i in items},
         )
-    return {**result, "items": items, "all_ok": all_ok, "frame_sha256": frame_hash}
+    return {**result, "items": items, "all_ok": all_ok, "frame_sha256": frame_hash,
+            "thresholds": {"accept": config.CONF_ACCEPT, "review": config.CONF_REVIEW}}
 
 
 class SealRequest(BaseModel):
@@ -280,8 +296,8 @@ def pickup(req: PickupRequest, session: dict = Depends(dasher_only)):
     order.status = "picked_up"
     order.pickup_nonce = None  # burn the nonce: one-time use
     ledger.append("picked_up", dasher_id, order_id=order.id, token_sha256=fingerprint)
-    return {"ok": True, "order_id": order.id, "display_name": order.display_name,
-            "item_count": sum(q for _, q in order.items)}
+    return {"ok": True, "order_id": order.id, "ref": order.ref, "display_name": order.display_name,
+            "item_count": order.item_count}
 
 
 # Serve the single-page frontend last so /api routes take precedence.

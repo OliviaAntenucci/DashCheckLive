@@ -1,4 +1,7 @@
 # Local computer vision (large: pulls in PyTorch). The app runs without it,
 # falling back to staff-only confirmation.
 -r requirements.txt
-ultralytics>=8.1
+ultralytics>=8.3
+# Text encoder YOLO-World needs for set_classes(). Installed up front so
+# ultralytics doesn't try to pip-install it at runtime (needs git on PATH).
+clip @ git+https://github.com/ultralytics/CLIP.git
