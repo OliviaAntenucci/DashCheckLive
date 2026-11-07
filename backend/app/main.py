@@ -19,6 +19,7 @@ from collections import Counter
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
@@ -52,7 +53,9 @@ async def security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; "
-        "style-src 'self'; script-src 'self'; frame-ancestors 'none'"
+        # Google Fonts (Roboto) is the only third-party origin allowed, and only for CSS + font files.
+        "style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; "
+        "script-src 'self'; frame-ancestors 'none'"
     )
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
@@ -327,6 +330,12 @@ def pickup(req: PickupRequest, session: dict = Depends(dasher_only)):
     ledger.append("picked_up", dasher_id, order_id=order.id, token_sha256=fingerprint)
     return {"ok": True, "order_id": order.id, "ref": order.ref, "display_name": order.display_name,
             "item_count": order.item_count}
+
+
+@app.get("/logo.jpg", include_in_schema=False)
+def logo():
+    """Serve only the logo from images/ (the rest of that folder isn't public)."""
+    return FileResponse(config.ROOT / "images" / "logo.jpg", media_type="image/jpeg")
 
 
 # Serve the single-page frontend last so /api routes take precedence.

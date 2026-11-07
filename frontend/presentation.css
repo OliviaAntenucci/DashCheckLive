@@ -22,9 +22,9 @@
   --raise: 9px 9px 20px var(--lo), -9px -9px 20px var(--hi);
   --raise-sm: 5px 5px 12px var(--lo), -5px -5px 12px var(--hi);
   --inset: inset 4px 4px 10px var(--lo), inset -4px -4px 10px var(--hi);
-  --display: "SF Pro Display", "Segoe UI Variable Display", "Inter", "Segoe UI", system-ui, sans-serif;
-  --text: "SF Pro Text", "Segoe UI Variable Text", "Inter", "Segoe UI", system-ui, sans-serif;
-  --mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --display: "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --text: "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-family: var(--text);
   color: var(--ink);
   background: var(--bg);

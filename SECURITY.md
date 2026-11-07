@@ -73,7 +73,7 @@ Each event stores `prev` (hash of the previous event) and `hash = SHA-256(event 
 
 ## Browser hardening
 
-CSP `default-src 'self'` (no inline script, no third-party origins), `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy: camera=(self)`. All dynamic text is rendered via `textContent` to avoid XSS.
+CSP `default-src 'self'` (no inline script; the only third-party origins are Google Fonts for the Roboto typeface, `fonts.googleapis.com` for CSS and `fonts.gstatic.com` for font files, never for scripts), `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy: camera=(self)`. All dynamic text is rendered via `textContent` to avoid XSS.
 
 Session tokens are kept in `sessionStorage` so a page refresh doesn't sign staff out mid-rush. Trade-off: unlike in-memory storage, script running on the page could read it. The strict CSP and no-`innerHTML` rule are what mitigate that. `sessionStorage` is per tab and cleared when the tab closes, which is narrower than `localStorage`. Production would use an `HttpOnly; Secure; SameSite=Strict` cookie instead.
 

@@ -4,12 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DashCheckLive</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@100..900&display=swap">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
   <!-- ============ Sign-in page ============ -->
   <section id="view-login" class="view login-view">
+    <div class="corner-logo">
+      <span class="logo-badge"><img src="/logo.jpg" alt=""></span>
+      <span class="brand">DashCheck<span>Live</span></span>
+    </div>
     <div class="login-card">
       <!-- Left: the pitch, with a live preview of a check -->
       <div class="login-pitch">
@@ -79,7 +86,10 @@
 
       <!-- ===== Left: orders ===== -->
       <aside class="orders-panel">
-        <div class="brand">DashCheck<span>Live</span></div>
+        <div class="panel-logo">
+          <span class="logo-badge"><img src="/logo.jpg" alt=""></span>
+          <span class="brand">DashCheck<span>Live</span></span>
+        </div>
         <div class="sec-head">
           <div><h3>Orders</h3><p id="queue-sub" class="sec-sub"><span id="queue-count">0</span> waiting</p></div>
         </div>
@@ -106,8 +116,6 @@
           <div id="health" class="health hidden"></div>
           <div class="top-actions">
             <span id="who" class="glass-pill who"></span>
-            <button id="open-log" class="glass-pill glass-btn">Audit log</button>
-            <button id="demo-reset" class="glass-pill glass-btn">Reset demo</button>
             <button id="logout" class="glass-pill glass-btn">Sign out</button>
           </div>
         </div>
@@ -117,9 +125,7 @@
           <div class="cam-tools">
             <select id="camera-select" class="glass-pill" title="Camera"></select>
             <button id="cam-toggle" class="glass-pill glass-btn">Pause</button>
-            <label class="glass-pill glass-btn">Upload<input id="upload" type="file" accept="image/jpeg,image/png,image/webp"></label>
-            <button id="recount" class="glass-pill glass-btn hidden" title="Start counting this order from zero">Reset counts ↻</button>
-          </div>
+            <label class="glass-pill glass-btn">Upload<input id="upload" type="file" accept="image/jpeg,image/png,image/webp"></label>          </div>
         </div>
 
         <div id="toasts" class="toasts" aria-live="polite"></div>

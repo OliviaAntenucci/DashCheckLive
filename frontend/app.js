@@ -262,7 +262,7 @@ function renderQueue() {
         el("div", { className: "oi-top" },
           el("strong", { textContent: o.display_name }),
           el("span", { className: "oi-id", textContent: `#${o.id}` })),
-        el("div", { className: "oi-city", textContent: `⌖ ${o.delivery_city}` })),
+        el("div", { className: "oi-city", textContent: `${o.item_count} item${o.item_count === 1 ? "" : "s"}` })),
       el("span", { className: `status-pill ${o.status}`, textContent: STATUS_TEXT[o.status] || o.status }));
     li.addEventListener("click", () => openOrder(o.id));
     return li;
@@ -271,7 +271,8 @@ function renderQueue() {
 }
 $("#search").addEventListener("input", renderQueue);
 
-$("#demo-reset").addEventListener("click", async () => {
+// No on-screen button: Shift+R (see the keyboard shortcuts near the end of this file).
+async function resetDemo() {
   await authed("/api/demo/reset", { method: "POST" });
   for (const k of Object.keys(seenCounts)) delete seenCounts[k];
   state.current = null;
@@ -280,7 +281,7 @@ $("#demo-reset").addEventListener("click", async () => {
   renderSide();
   await refreshQueue();
   refreshLog();
-});
+}
 
 // ---------------- order ----------------
 
@@ -310,6 +311,8 @@ async function openOrder(id) {
       $("#checklist").replaceChildren(el("p", { className: "error", textContent: e.message }));
     }
   }
+  // Start the 5 s "missing!" timer once the order is ready to check.
+  if (state.current && state.current.id === id && state.current.status === "prepared") armMissing(id);
 }
 
 // Right panel: delivery address card + cart (one line per receipt item with a ✓/✗ chip).
@@ -397,7 +400,6 @@ function renderSide() {
   } else prep.classList.add("hidden");
 
   $("#seal-box").classList.toggle("hidden", !o || o.status !== "prepared");
-  $("#recount").classList.toggle("hidden", !o || o.status !== "prepared");
   $("#confirm").checked = false;
   $("#seal-error").textContent = "";
 
@@ -520,8 +522,8 @@ function updateSealButton() {
   const btn = $("#seal");
   btn.disabled = !$("#confirm").checked;
   btn.textContent = notOk
-    ? `Seal anyway · ${notOk} override${notOk > 1 ? "s" : ""} →`
-    : "Seal & release to Dasher →";
+    ? `Seal anyway · ${notOk} override${notOk > 1 ? "s" : ""}`
+    : "Seal & release to Dasher";
 }
 $("#confirm").addEventListener("change", updateSealButton);
 
@@ -597,12 +599,14 @@ function showSealPop(o) {
   }, 1700));
 }
 
-$("#recount").addEventListener("click", async () => {
+// No on-screen button: Shift+C.
+async function resetCounts() {
   const o = state.current;
   if (!o || o.status !== "prepared") return;
   try {
     state.current = await authed(`/api/orders/${o.id}/recount`, { method: "POST" });
     delete seenCounts[o.id];
+    armMissing(o.id);
     state.checklistKey = "";
     clearOverlay();
     renderSide();
@@ -610,7 +614,7 @@ $("#recount").addEventListener("click", async () => {
   } catch (e) {
     $("#seal-error").textContent = e.message;
   }
-});
+}
 
 // ---------------- QR modal + simulated Dasher scan ----------------
 
@@ -911,10 +915,10 @@ async function sendFrame(blob, mode) {
   const r = await authed(`/api/orders/${id}/frame`, { method: "POST", form });
   if (!state.current || state.current.id !== id) return; // switched orders mid-request
   state.lastResult = r;
-  const found = Object.values(r.counts || {}).reduce((a, b) => a + b, 0) || r.boxes.length;
-  $("#cam-msg").textContent = `${found} objects · ${r.model || "vision"}${r.fallback_reason ? ` (OpenRouter failed: ${r.fallback_reason})` : ""} · frame ${r.frame_sha256.slice(0, 10)}…`;
+  $("#cam-msg").textContent = ""; // only used for problems now (camera errors etc.)
   announceDetections(id, r);
-  renderChecklist(r.items);
+  renderChecklist(r.items); // updates state.current.checklist, which flagMissing reads
+  announceMissing(id);
   if ($("#stage-msg").textContent) updateStageMsg();
   refreshLog();
 }
@@ -975,7 +979,7 @@ function drawFlashes() {
   // Live video uses object-fit: cover, uploaded photos use contain.
   const media = state.photoMode ? $("#photo") : $("#video");
   ctx.lineWidth = 4;
-  ctx.font = "800 15px system-ui, sans-serif";
+  ctx.font = "700 15px Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif";
   for (const f of flashes) {
     const nw = media.videoWidth || media.naturalWidth || f.w;
     const nh = media.videoHeight || media.naturalHeight || f.h;
@@ -1003,15 +1007,23 @@ function drawFlashes() {
   flashRaf = requestAnimationFrame(drawFlashes);
 }
 
-// "Bottle detected!" stays on screen: pops in big, then shrinks into a compact tag in a
-// stack. One tag per item (updated if its count rises). Cleared by clearOverlay().
-function showToast(item) {
+// Item tags on the camera, one per item, stacked on the right. They stay on screen:
+// pop in big, then shrink into a compact tag after 2 s. Cleared by clearOverlay().
+//   "Bottle detected!"  green edge  (showToast)
+//   "Fork missing!"     red edge    (announceMissing, after MISSING_AFTER_MS of checking)
+// A missing tag turns into a detected tag when that item is found.
+const MISSING_AFTER_MS = 5000;
+let checkStart = null; // {id, t}: when we started checking the current order
+let missingTimer = null;
+
+function itemTag(item, kind) {
   const box = $("#toasts");
   const name = item.label.charAt(0).toUpperCase() + item.label.slice(1);
   const extra = item.expected > 1 ? ` (${Math.min(item.detected, item.expected)}/${item.expected})` : "";
+  const text = `${name} ${kind}!${extra}`;
   let toast = [...box.children].find((t) => t.dataset.label === item.label);
   if (toast) {
-    toast.querySelector(".t-text").textContent = `${name} detected!${extra}`;
+    toast.querySelector(".t-text").textContent = text;
     toast.classList.remove("compact");
     toast.style.animation = "none";
     void toast.offsetWidth; // restart the pop animation
@@ -1019,11 +1031,39 @@ function showToast(item) {
   } else {
     toast = el("div", { className: "toast", dataset: { label: item.label } },
       el("span", { className: "t-icon" }, KAWAII(item.label) || (FOOD_ICONS[item.label] || "🍽️")),
-      el("span", { className: "t-text", textContent: `${name} detected!${extra}` }));
+      el("span", { className: "t-text", textContent: text }));
     box.append(toast);
   }
+  toast.classList.toggle("missing", kind === "missing");
   clearTimeout(toast._shrink);
   toast._shrink = setTimeout(() => toast.classList.add("compact"), 2000);
+}
+
+function showToast(item) {
+  itemTag(item, "detected");
+}
+
+// Start (or restart) the grace period for an order. A timer fires the check even if
+// no new camera frame arrives (paused camera, single uploaded photo, slow responses).
+function armMissing(orderId) {
+  clearTimeout(missingTimer);
+  checkStart = { id: orderId, t: Date.now() };
+  missingTimer = setTimeout(() => flagMissing(orderId), MISSING_AFTER_MS);
+}
+
+function flagMissing(orderId) {
+  const o = state.current;
+  if (!o || o.id !== orderId || o.status !== "prepared") return;
+  const tagged = new Set([...$("#toasts").children].map((t) => t.dataset.label));
+  for (const i of o.checklist || []) {
+    if (i.expected > 0 && i.detected < i.expected && !tagged.has(i.label)) itemTag(i, "missing");
+  }
+}
+
+// Called on every frame: once the grace period is over, keep missing tags up to date.
+function announceMissing(orderId) {
+  if (!checkStart || checkStart.id !== orderId) return armMissing(orderId);
+  if (Date.now() - checkStart.t >= MISSING_AFTER_MS) flagMissing(orderId);
 }
 
 function clearToasts() {
@@ -1032,7 +1072,20 @@ function clearToasts() {
 
 // ---------------- audit log ----------------
 
-$("#open-log").addEventListener("click", () => { $("#log-drawer").classList.remove("hidden"); refreshLog(true); });
+function openAuditLog() {
+  $("#log-drawer").classList.remove("hidden");
+  refreshLog(true);
+}
+
+// Demo shortcuts (the buttons were removed from the station screen):
+//   Shift+R  reset demo orders   Shift+C  reset counts for this order   Shift+L  audit log
+document.addEventListener("keydown", (e) => {
+  if (!e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.closest("input, textarea, select")) return;
+  if ($("#view-station").classList.contains("hidden")) return;
+  const action = { R: resetDemo, C: resetCounts, L: openAuditLog }[e.key.toUpperCase()];
+  if (action) { e.preventDefault(); action(); }
+});
 $("#close-log").addEventListener("click", () => $("#log-drawer").classList.add("hidden"));
 
 let logTimer = null;

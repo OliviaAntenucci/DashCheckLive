@@ -21,8 +21,8 @@
   --raise: 9px 9px 20px var(--lo), -9px -9px 20px var(--hi);
   --raise-sm: 5px 5px 12px var(--lo), -5px -5px 12px var(--hi);
   --inset: inset 4px 4px 10px var(--lo), inset -4px -4px 10px var(--hi);
-  --display: "SF Pro Display", "Segoe UI Variable Display", "Inter", "Segoe UI", system-ui, sans-serif;
-  --text: "SF Pro Text", "Segoe UI Variable Text", "Inter", "Segoe UI", system-ui, sans-serif;
+  --display: "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --text: "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -65,8 +65,17 @@ input::placeholder, textarea::placeholder { color: #a19d97; }
 .pill.warn { background: var(--warn-bg); color: var(--warn); }
 .pill.bad { background: #f3d9d3; color: var(--bad); }
 
+/* ================= logo ================= */
+/* Badge zoomed in on the burger mascot (it sits centered with white space around it). */
+.logo-badge { width: 52px; height: 52px; flex: none; border-radius: 16px; overflow: hidden; background: #fff; box-shadow: var(--raise-sm); }
+.logo-badge img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5) translateY(2%); display: block; }
+.corner-logo, .panel-logo { display: flex; align-items: center; gap: 12px; }
+.corner-logo { position: absolute; top: 24px; left: 28px; }
+.corner-logo .brand, .panel-logo .brand { font-size: 22px; }
+.orders-panel .panel-logo { padding: 0 6px 4px; }
+
 /* ================= login ================= */
-.login-view { min-height: 100vh; display: grid; place-items: center; align-content: center; gap: 16px; padding: 24px; }
+.login-view { position: relative; min-height: 100vh; display: grid; place-items: center; align-content: center; gap: 16px; padding: 96px 24px 24px; }
 .login-card { width: 100%; max-width: 1040px; display: grid; grid-template-columns: 1.1fr 1fr; gap: 0;
   background: var(--bg); border-radius: 40px; box-shadow: var(--raise); overflow: hidden; }
 .login-pitch { padding: 44px 42px; display: flex; flex-direction: column; gap: 14px; }
@@ -151,7 +160,7 @@ input::placeholder, textarea::placeholder { color: #a19d97; }
 /* ---- left: orders list ---- */
 .orders-panel { background: var(--bg); border-radius: 32px; box-shadow: var(--raise); display: flex; flex-direction: column;
   gap: 16px; padding: 24px 18px 18px; min-height: 0; }
-.orders-panel .brand { font-size: 24px; padding: 0 6px 4px; }
+.orders-panel > .brand { font-size: 24px; padding: 0 6px 4px; }
 .sec-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 0 6px; }
 .sec-head h3 { font-size: 20px; font-weight: 650; }
 .sec-sub { margin: 2px 0 0; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
@@ -230,7 +239,7 @@ select.glass-pill option { background: var(--surface); color: var(--ink); }
 
 /* "Bottle detected!" toasts */
 /* "Bottle detected!" tags: stay on screen, stacked on the right of the camera */
-.toasts { position: absolute; top: 130px; right: 28px; bottom: 28px; z-index: 6; display: flex; flex-direction: column;
+.toasts { position: absolute; top: 176px; right: 28px; bottom: 28px; z-index: 6; display: flex; flex-direction: column;
   align-items: flex-end; gap: 8px; pointer-events: none; overflow: hidden; }
 .toast { display: flex; align-items: center; gap: 12px; background: var(--surface); color: var(--ink); padding: 7px 22px 7px 7px;
   border-radius: 999px; font-family: var(--display); font-weight: 700; font-size: 18px; letter-spacing: -.02em; white-space: nowrap;
@@ -245,6 +254,9 @@ select.glass-pill option { background: var(--surface); color: var(--ink); }
   box-shadow: 0 6px 16px rgba(0, 0, 0, .25), inset 0 0 0 2px var(--ok);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .toast.compact .t-icon { width: 28px; height: 28px; }
+/* "Fork missing!": red edge, warm tint */
+.toast.missing { background: #f6e6e1; color: var(--accent-dark); box-shadow: 0 14px 34px rgba(0, 0, 0, .35), inset 0 0 0 2px var(--accent); }
+.toast.missing.compact { background: rgba(246, 230, 225, .92); box-shadow: 0 6px 16px rgba(0, 0, 0, .25), inset 0 0 0 2px var(--accent); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(-14px) scale(.85); } to { opacity: 1; transform: none; } }
 
 /* checklist dock along the bottom of the camera */
@@ -378,13 +390,13 @@ select.glass-pill option { background: var(--surface); color: var(--ink); }
 .drawer-head { display: flex; gap: 12px; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--line); }
 .drawer-head strong { font-family: var(--display); font-size: 17px; letter-spacing: -.02em; }
 .drawer-head button { margin-left: auto; }
-.drawer ol { list-style: none; margin: 0; padding: 8px 20px; overflow: auto; font: 12px/1.55 ui-monospace, Consolas, monospace; }
+.drawer ol { list-style: none; margin: 0; padding: 8px 20px; overflow: auto; font: 12.5px/1.55 var(--text); }
 .drawer li { padding: 6px 0; border-bottom: 1px dashed var(--line); word-break: break-word; }
 .drawer .hash { color: var(--muted); }
 
 /* ================= paper receipt (completion page) ================= */
 .receipt { background: #fbfaf6; color: #1b1b1b; border-radius: 14px; padding: 14px 14px 18px;
-  font: 12.5px/1.45 ui-monospace, Consolas, monospace; box-shadow: var(--raise); }
+  font: 13px/1.45 var(--text); box-shadow: var(--raise); }
 .receipt hr { border: 0; border-top: 1px dashed #999; margin: 8px 0; }
 .receipt .r-line { display: flex; justify-content: space-between; gap: 8px; }
 .receipt .r-mod { padding-left: 18px; color: #555; }
