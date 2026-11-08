@@ -18,7 +18,7 @@ LLM_TIMEOUT_SECONDS = 15
 
 # Camera counting. "openrouter": a vision model on OpenRouter counts items in each
 # frame (images leave the device). "local": YOLO on this machine only.
-VISION_BACKEND = os.getenv("VISION_BACKEND", "openrouter").lower()
+VISION_BACKEND = os.getenv("VISION_BACKEND", "local").lower()
 VISION_MODEL = os.getenv("VISION_MODEL", "google/gemini-2.5-flash")
 VISION_FALLBACK = os.getenv("VISION_FALLBACK", "local").lower()  # "local" or "none"
 VISION_MIN_INTERVAL = float(os.getenv("VISION_MIN_INTERVAL", "0.8"))  # min seconds between call starts (cost cap)
